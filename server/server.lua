@@ -220,3 +220,19 @@ AddEventHandler('playerDropped', function()
         end
     end)
 end)
+
+-- Wasabi Ambulance V2 only accepts revives coming from the server, so the client asks us
+-- to revive it when it respawns in a paintball match.
+RegisterNetEvent("Pug:server:PaintballWasabiRevive", function()
+    local src = source
+    local lid = PlayerLobby[src]
+    if not lid or not Lobbies[lid] or not Lobbies[lid].started then return end
+
+    local wasabiResource = GetWasabiAmbulanceResource()
+    if not wasabiResource then return end
+
+    local ok = pcall(function() exports[wasabiResource]:RevivePlayer(src) end)
+    if not ok then
+        TriggerClientEvent("wasabi_ambulance:revive", src)
+    end
+end)

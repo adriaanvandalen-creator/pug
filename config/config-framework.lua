@@ -14,6 +14,18 @@ elseif Framework == "ESX" then
     FWork = exports[Config.CoreName]:getSharedObject()
 end
 ------------------------------
+-- Wasabi Ambulance (V1 and V2). Add your folder name here if you renamed the resource.
+Config.WasabiAmbulanceResources = {
+    "wasabi_ambulance",
+    "wasabi_ambulance_v2",
+}
+function GetWasabiAmbulanceResource()
+    for _, name in ipairs(Config.WasabiAmbulanceResources) do
+        if GetResourceState(name) == 'started' then return name end
+    end
+    return nil
+end
+------------------------------
 -- [THESE ARE NOT NOT MEANT TO BE TOUCHED UNLESS YOU KNOW WHAT YOU ARE DOING]
 Config.CompatibleTargetScripts = { -- Put whatever target script you use in this table if it is not here.
     "ox_target",

@@ -796,9 +796,32 @@ RegisterNetEvent("Pug:client:PaintballReviveEvent", function(PlayerHeadingSet)
     elseif GetResourceState('ak47_ambulancejob') == 'started' then
         TriggerEvent('ak47_ambulancejob:revive') 
         TriggerEvent('ak47_ambulancejob:skellyfix') 
-    elseif GetResourceState('wasabi_ambulance') == 'started' then
-        TriggerEvent('esx_ambulancejob:revive')
+    elseif GetWasabiAmbulanceResource() then
+        -- Wasabi Ambulance V2 ignores revive events triggered by other client resources,
+        -- so ask the server to revive us (export / server-sent event) and keep the old
+        -- client-side events for V1.
+        TriggerServerEvent('Pug:server:PaintballWasabiRevive')
         TriggerEvent('wasabi_ambulance:revive')
+        if Framework == "QBCore" then
+            TriggerEvent('hospital:client:Revive')
+        else
+            TriggerEvent('esx_ambulancejob:revive')
+        end
+        CreateThread(function()
+            -- Last resort: if we are still dead after the revive request, resurrect natively.
+            Wait(1500)
+            local ped = PlayerPedId()
+            if IsEntityDead(ped) or IsPedFatallyInjured(ped) then
+                local coords = GetEntityCoords(ped)
+                local heading = PlayerHeadingSet or GetEntityHeading(ped)
+                NetworkResurrectLocalPlayer(coords.x, coords.y, coords.z, heading, true, false)
+                ped = PlayerPedId()
+                ClearPedTasksImmediately(ped)
+                ClearPedBloodDamage(ped)
+                SetEntityHealth(ped, GetEntityMaxHealth(ped))
+            end
+            if PlayerHeadingSet then SetEntityHeading(PlayerPedId(), PlayerHeadingSet) end
+        end)
     elseif GetResourceState('ars_ambulancejob') == 'started' then
         Wait(1000)
         TriggerEvent('ars_ambulancejob:healPlayer', {revive = true}) -- to revive player
