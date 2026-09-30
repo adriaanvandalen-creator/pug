@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pug Paintball</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@200;600&display=swap" rel="stylesheet" />
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+
+  <style>
+    :root{
+      --w: 108vh;
+      --h: 68vh;
+      --rail-w: 25vh;
+      --row-h: 2.15vh;
+      --fs: 1.25vh;
+      --bg-top: rgba(16,20,26,.92);
+      --bg-bot: rgba(22,28,36,.84);
+      --panel: rgba(20,24,32,.65);
+      --red-tint: rgba(120, 30, 38, .35);
+      --blue-tint: rgba(35, 85, 125, .35);
+      --header: #e4ebf7;
+      --text: #eef3fb;
+      --sep: rgba(255,255,255,.07);
+      --sep-soft: rgba(255,255,255,.04);
+      --accent: #00e0ff;
+      --select: #ff8a00;
+      --gold:   #f5c542;
+      --silver: #c9d1d9;
+      --bronze: #d08770;
+
+      /* NEW: row + emblem defaults (used when no group hex) */
+      --red-row-bg:  rgba(160,45,55,.05);
+      --blue-row-bg: rgba(45,100,150,.05);
+
+      --red-emblem-grad:  radial-gradient(circle at 35% 35%, rgba(255,90,90,.144), rgba(140,0,0,.144) 60%, rgba(0,0,0,.3));
+      --blue-emblem-grad: radial-gradient(circle at 35% 35%, rgba(100,150,255,.144), rgba(0,50,140,.144) 60%, rgba(0,0,0,.3));
+
+      --red-emblem-glow:  rgba(255, 60, 60, 0.144);
+      --blue-emblem-glow: rgba(60, 99, 255, 0.144);
+    }
+
+
+    *{ box-sizing: border-box }
+    html, body, .container, .ui { background: rgba(0,0,0,0) !important }
+    html, body { margin:0; padding:0; height:100% }
+    body { font-family:'Poppins',system-ui,sans-serif }
+    .container { height:100vh }
+
+    .ui{
+      position:absolute;
+      width:var(--w);
+      height:var(--h);
+      left:50%;
+      top:50%;
+      transform:translate(-50%,-50%);
+      display:none;
+    }
+
+    .board{
+      position:relative;
+      width:100%;
+      height:100%;
+      background:linear-gradient(180deg,var(--bg-top),var(--bg-bot));
+      border-radius:1vh;
+      border:1px solid var(--sep);
+      overflow:hidden;
+      box-shadow: 0 1vh 3vh rgba(0,0,0,.5);
+    }
+
+    .headerbar{
+      position:absolute; left:0; right:0; top:0; height:3.8vh;
+      display:flex; align-items:center; gap:1.2vh; padding:0 1.6vh;
+      background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,0));
+      border-bottom:1px solid var(--sep);
+      color:var(--header); text-shadow:1px 1px 0 #000; font-weight:600; letter-spacing:.06em;
+      font-size:1.9vh;
+    }
+
+    .layout{
+      position:absolute; top:3.8vh; bottom:0; left:0; right:0;
+      display:grid; grid-template-columns:var(--rail-w) 1fr;
+      gap:0;
+    }
+
+    .rail{
+      background:linear-gradient(180deg,rgba(0,0,0,.22),rgba(0,0,0,.08));
+      border-right:1px solid var(--sep);
+      padding:.9vh;
+      display:flex; flex-direction:column; gap:1.2vh;
+    }
+    .team{
+      border-radius:.9vh;
+      padding:1vh .9vh;
+      height:calc((var(--h) - 7vh)/2.2);
+      display:grid;
+      grid-template-rows:auto 1fr auto;
+      justify-items:center;
+      text-align:center;
+      color:var(--header);
+      background: linear-gradient(180deg, var(--panel), rgba(0,0,0,0));
+      position:relative;
+      overflow:hidden;
+    }
+    .team.red::before{
+      content:""; position:absolute; inset:0;
+      background: radial-gradient(80% 120% at 20% 20%, var(--red-tint), transparent 60%);
+      pointer-events:none;
+    }
+    .team.blue::before{
+      content:""; position:absolute; inset:0;
+      background: radial-gradient(80% 120% at 20% 20%, var(--blue-tint), transparent 60%);
+      pointer-events:none;
+    }
+    .teamlabel { font-size:1.35vh; letter-spacing:.18em; opacity:.95 }
+    .teamscore { align-self:center; font-size:5.2vh; line-height:1; color:#fff; text-shadow:0 0 1vh rgba(0,0,0,.6); font-weight:700 }
+
+    .emblem{
+      width: 5.4vh;
+      height: 5.4vh;
+      border-radius: 50%;
+      position: relative;
+      overflow: hidden;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      /* fallback background (when no logo) */
+      background: rgba(0,0,0,0.25);
+
+      border: 1px solid rgba(0,0,0,0.15);
+    }
+
+
+    .emblem img{
+      width: 100%;
+      height: 100%;
+
+      object-fit: contain;
+      padding: 0.4vh;
+
+      border-radius: 50%;
+      display: block;
+
+      position: relative;
+      z-index: 2; /* ALWAYS ABOVE overlays */
+      background: rgba(255,255,255,0.25);
+    }
+
+    .team.red .emblem{
+      background: var(--red-emblem-grad);
+      box-shadow:
+        0 0 1.2vh var(--red-emblem-glow),
+        inset 0 0 0.8vh rgba(0,0,0,0.25);
+    }
+
+    .team.blue .emblem{
+      background: var(--blue-emblem-grad);
+      box-shadow:
+        0 0 1.2vh var(--blue-emblem-glow),
+        inset 0 0 0.8vh rgba(0,0,0,0.25);
+    }
+
+    .team.red .emblem::before,
+    .team.red .emblem::after,
+    .team.blue .emblem::before,
+    .team.blue .emblem::after{
+      content: none !important;
+      display: none !important;
+    }
+
+
+
+
+
+    .tablewrap { position:relative; padding:.8vh 1vh .8vh 1vh }
+
+    .head, .row{
+      display:grid;
+      grid-template-columns: 46% 14% 12% 12% 16%;
+      align-items:center;
+      width:100%;
+    }
+
+    .head{
+      color:var(--header);
+      font-weight:600;
+      letter-spacing:.08em;
+      font-size:1.35vh;
+      padding:.55vh .6vh .55vh .6vh;
+      border-bottom:1px solid var(--sep);
+      text-shadow:1px 1px 0 #000;
+    }
+    .head .cell.right{ text-align:right }
+    .head .cell{ position:relative }
+    .head .cell:not(:first-child)::after{
+      content:""; position:absolute; left:-.2vh; top:25%; bottom:25%;
+      width:1px; background:linear-gradient(var(--accent), rgba(0,0,0,0));
+      opacity:.35;
+    }
+
+    .body { max-height: calc(var(--h) - 3.8vh - 1.6vh); overflow:hidden }
+    #rows-red, #rows-blue { position: relative; }
+    #rows-blue { margin-top: 0; }
+
+    .row{
+      height:var(--row-h);
+      color:var(--text);
+      font-weight:600;
+      font-size:var(--fs);
+      text-shadow:1px 1px 0 #000;
+      padding:.35vh .6vh .35vh .6vh;
+      border-bottom:1px solid var(--sep-soft);
+      background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(0,0,0,0));
+    }
+    .row.red  { box-shadow: inset 0 0 0 9999px var(--red-row-bg); }
+    .row.blue { box-shadow: inset 0 0 0 9999px var(--blue-row-bg); }
+
+    /* Center the player cell content vertically in the row */
+    .row .cell.player{
+      display: flex;
+      align-items: center;
+    }
+
+    .row.selected { outline:2px solid var(--select); outline-offset:-2px }
+
+    .right { text-align:right }
+    .cell { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+
+    .footerhint{ position:absolute; bottom:.6vh; right:1vh; opacity:.45; font-size:1.05vh; color:#cfeaf3 }
+
+    .board.ffa .layout{ grid-template-columns: 1fr }
+    .board.ffa .rail{ display:none }
+    .board.ffa .tablewrap{ padding: 1vh 1.2vh }
+    .podium{
+      display:grid; grid-template-columns: 1.2fr 1.5fr 1fr; gap:1vh;
+      margin: .4vh .2vh 1vh .2vh;
+      align-items: end;
+    }
+    .podium .slot{
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,0));
+      border: 1px solid var(--sep);
+      border-radius: .8vh;
+      padding: .8vh;
+      text-shadow: 1px 1px 0 #000;
+      color: var(--text);
+      display:grid; grid-template-rows: auto auto; justify-items:center;
+    }
+    .podium .name{ font-weight:600; font-size:1.4vh; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+    .podium .pts{ font-size:2.4vh; font-weight:700; line-height:1 }
+    .gold   { box-shadow: 0 0 0 .2vh rgba(245,197,66,.25) inset }
+    .silver { box-shadow: 0 0 0 .2vh rgba(201,209,217,.25) inset }
+    .bronze { box-shadow: 0 0 0 .2vh rgba(208,135,112,.25) inset }
+
+    .hidden{ display:none !important }
+
+
+    /* SCOREBOARD RANK ICON + LEVEL */
+    .player-rank-wrap{
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4vh;
+    }
+    .player-rank-icon{
+      width: 1.7vh;
+      height: 1.7vh;
+      object-fit: contain;
+      filter: drop-shadow(0 0 0.4vh rgba(0,0,0,.9));
+    }
+    .player-rank-text{
+      font-size: 1.0vh;
+      opacity: 0.85;
+      margin-right: 0.2vh;
+    }
+    .player-name-text{
+      font-size: var(--fs);
+    }
+
+
+
+
+
+
+
+    /* KILL FEED UI */
+    .killfeed {
+      position: fixed;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4vh;
+      z-index: 9999;
+      font-family: 'Poppins', system-ui, sans-serif;
+      pointer-events: none;
+
+      /* Make it hug its content instead of stretching full screen */
+      width: max-content;
+      max-width: 40vh;      /* optional safety cap */
+      align-items: flex-start;
+
+      /* Default fallback (optional) */
+      top: 8vh;
+      right: 3vh;
+    }
+
+
+    .kf-row{
+      display:flex;
+      align-items:center;
+      gap:0.6vh;
+      padding:0.25vh 0.7vh;
+      background:rgba(10,12,18,.78);
+      border-radius:0.5vh;
+      border:1px solid rgba(255,255,255,.05);
+      box-shadow:0 0.4vh 1.1vh rgba(0,0,0,.6);
+      font-size:1.3vh;
+      color:#eef3fb;
+    }
+    .kf-name{
+      max-width:14vh;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      text-shadow:1px 1px 0 #000;
+    }
+    .kf-weapon{
+      width:2.1vh;
+      height:2.1vh;
+      object-fit:contain;
+      filter:drop-shadow(0 0 0.4vh rgba(0,0,0,.7));
+    }
+
+
+
+    .pb-match-timer {
+        position: fixed;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.7);
+
+        padding: 0.5vh 2vh;
+
+        font-size: 1.7vh;
+        font-weight: 800;                        /* SUPER BOLD */
+        font-family: 'Poppins', sans-serif;
+
+        color: white;
+        text-align: center;
+        text-transform: uppercase;
+
+        border-radius: 0.6vh;                    /* slight rounding, still square-ish */
+        letter-spacing: 0.05em;                  /* subtle spacing for bold fonts */
+        text-shadow: 0 0 4px #000, 0 0 8px #000; /* crisp readable outline */
+
+        display: none;
+        z-index: 999999;
+    }
+
+
+
+    /* RANK UP POPUP */
+    .rankup-overlay{
+      position: fixed;
+      bottom: 3.2vh;
+      left: 50%;
+      transform: translateX(-50%) translateY(1vh);
+      z-index: 10000;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .25s ease-out, transform .25s ease-out;
+    }
+    .rankup-overlay.show{
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .rankup-panel{
+      min-width: 50vh;
+      max-width: 56vh;
+      padding: 0.25vh 1.6vh 0.4vh 1.6vh;   /* MUCH THINNER */
+
+      background: linear-gradient(180deg, rgba(10,12,18,.96), rgba(5,6,10,.94));
+      border-radius: 0.7vh;
+      border: 1px solid rgba(255,255,255,.06);
+      box-shadow: 0 0.5vh 1.4vh rgba(0,0,0,.6);
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.15vh;                /* EXTREMELY tight panel gap */
+      color: #eef3fb;
+      text-shadow: 1px 1px 0 #000;
+    }
+
+
+    /* TITLE + ARROW ON SAME LINE (THIS MAKES THE BOX THIN) */
+    .rankup-title-row{
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4vh;                 /* smaller space between text and arrow */
+      margin-bottom: -0.35vh;     /* pulls it closer to bar */
+    }
+
+
+    .rankup-title{
+      font-size: 1.15vh;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #f5c542;
+      margin-top: 0.1vh;          /* slight lift */
+    }
+
+
+    .rank-arrow{
+      font-size: 1.35vh;          /* slightly smaller */
+      margin-top: 0.05vh;
+    }
+
+
+    /* ICONS + BAR ON SAME VERTICAL CENTER */
+    .rankup-progress-wrapper{
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: -0.25vh;        /* pulls bar closer upward */
+    }
+
+
+    .rank-badge{
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.05vh;
+    }
+
+    .rank-badge img{
+      width: 3vh;                   /* keep small */
+      height: 3vh;
+      object-fit: contain;
+      filter: drop-shadow(0 0 0.5vh rgba(0,0,0,.9));
+    }
+
+    .rank-label{
+      font-size: 1.0vh;
+      font-weight: 600;
+      opacity: 0.9;
+      margin-top: -0.2vh;          /* pull closer */
+    }
+
+    /* ULTRA THIN BAR */
+    .rankup-progress{
+      flex: 1;
+      height: 0.75vh;              /* thinner bar */
+      margin: 0 1.6vh;
+      border-radius: 999px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.12);
+      overflow: hidden;
+    }
+
+    .rankup-progress-fill{
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #f5c542, #ff8a00);
+      box-shadow: 0 0 0.8vh rgba(245,197,66,.7);
+      transition: width 0.6s ease-out;
+    }
+
+    /* XP TEXT TIGHT TO BAR */
+    .rankup-xp-text{
+      font-size: 0.9vh;
+      opacity: 0.85;
+      text-align: center;
+      margin-top: -0.15vh;         /* closer to bar */
+    }
+
+
+
+
+
+
+
+
+
+    .tabs{
+      display:flex;
+      align-items:center;
+      gap:0.8vh;
+      margin:0.4vh 0 0.4vh 0.2vh;
+    }
+    .tab{
+      padding:0.25vh 0.9vh;
+      font-size:1.15vh;
+      font-weight:600;
+      letter-spacing:.12em;
+      border-radius:999px;
+      border:1px solid var(--sep-soft);
+      color:var(--header);
+      text-transform:uppercase;
+      cursor:pointer;
+      opacity:.55;
+      transition:all .15s ease-out;
+      background:rgba(0,0,0,.35);
+    }
+    .tab.active{
+      border-color:var(--accent);
+      background:rgba(0,0,0,.85);
+      opacity:1;
+      box-shadow:0 0 0.8vh rgba(0,224,255,.45);
+    }
+    .tabs.hidden{
+      display:none;
+    }
+
+
+
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    
+    <div id="killfeed" class="killfeed"></div>
+
+    <div id="pb-match-timer" class="pb-match-timer"></div>
+
+    <!-- RANK UP POPUP -->
+    <div id="rankup-overlay" class="rankup-overlay hidden">
+      <div class="rankup-panel">
+
+        <!-- TITLE + ARROW on the SAME LINE -->
+        <div class="rankup-title-row">
+          <div class="rankup-title">RANK UP</div>
+          <div class="rank-arrow">➜</div>
+        </div>
+
+        <!-- ICONS + BAR (aligned on same vertical center) -->
+        <div class="rankup-progress-wrapper">
+
+          <!-- OLD RANK BADGE -->
+          <div class="rank-badge" id="rankup-old-badge">
+            <img id="rankup-old-icon" />
+            <div id="rankup-old-text" class="rank-label"></div>
+          </div>
+
+          <!-- PROGRESS BAR -->
+          <div class="rankup-progress">
+            <div id="rankup-progress-fill" class="rankup-progress-fill"></div>
+          </div>
+
+          <!-- NEW RANK BADGE -->
+          <div class="rank-badge" id="rankup-new-badge">
+            <img id="rankup-new-icon" />
+            <div id="rankup-new-text" class="rank-label"></div>
+          </div>
+        </div>
+
+        <!-- XP TEXT -->
+        <div id="rankup-xp-text" class="rankup-xp-text">0 / 0 XP this level</div>
+
+      </div>
+    </div>
+
+
+    <div class="ui" id="pball-ui">
+      <div class="board" id="board">
+        <div class="headerbar" id="pball-mode">Hold Your Own</div>
+
+        <div class="layout">
+          <div class="rail">
+            <div class="team red">
+              <div class="teamlabel">RED TEAM</div>
+              <div class="teamscore" id="pball-RedScore">0</div>
+              <div class="emblem"></div>
+            </div>
+            <div class="team blue">
+              <div class="teamlabel">BLUE TEAM</div>
+              <div class="teamscore" id="pball-BlueScore">0</div>
+              <div class="emblem"></div>
+            </div>
+          </div>
+
+          <div class="tablewrap">
+            <div class="podium hidden" id="podium">
+              <div class="slot silver">
+                <div class="name" id="silver-name">—</div>
+                <div class="pts"  id="silver-pts">0</div>
+              </div>
+              <div class="slot gold">
+                <div class="name" id="gold-name">—</div>
+                <div class="pts"  id="gold-pts">0</div>
+              </div>
+              <div class="slot bronze">
+                <div class="name" id="bronze-name">—</div>
+                <div class="pts"  id="bronze-pts">0</div>
+              </div>
+            </div>
+
+            <div class="head" id="table-head">
+              <div class="cell c-player">PLAYER</div>
+              <div class="cell right c-score">SCORE</div>
+              <div class="cell right c-k">K</div>
+              <div class="cell right c-d">D</div>
+              <div class="cell right c-pts">POINTS</div>
+            </div>
+
+            <div class="body" id="body">
+              <div id="rows-red"></div>
+              <div id="rows-blue"></div>
+            </div>
+
+            <div class="footerhint">PUG Paintball</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var PBallActive = false;
+    let Config = {};
+
+    let lastScoreboardPacket = null;
+
+    let lastRedLogo = null;
+    let lastBlueLogo = null;
+
+    function safeLogo(url){
+      if (!url) return "";
+
+      let u = String(url).trim();
+      u = u.split("#")[0];
+
+      if (!u.startsWith("http://") && !u.startsWith("https://")) return "";
+
+      if (!u.match(/\.(png|jpg|jpeg|webp|gif)$/i)) return "";
+
+      const imgur = u.match(/^https?:\/\/(imgur\.com|www\.imgur\.com)\/([A-Za-z0-9]+)\.(png|jpg|jpeg|webp|gif)$/i);
+      if (imgur){
+        return `https://i.imgur.com/${imgur[2]}.${imgur[3]}`;
+      }
+
+      // ✅ allow everything else (your FiveManage R2 link, discord CDN, etc)
+      return u;
+    }
+
+
+    function setEmblem(team, url){
+      const el = document.querySelector(`.team.${team} .emblem`);
+      if (!el) return;
+
+      const clean = safeLogo(url);
+      const prev  = team === "red" ? lastRedLogo : lastBlueLogo;
+
+      if (clean === prev) return;
+
+      if (team === "red") lastRedLogo = clean;
+      else lastBlueLogo = clean;
+
+      if (!clean){
+        el.innerHTML = "";
+        return;
+      }
+
+      let img = el.querySelector("img");
+      if (!img){
+        img = document.createElement("img");
+        img.draggable = false;
+
+        img.addEventListener("load", () => {
+          console.log(`[PB] ${team} emblem loaded:`, img.src);
+        });
+
+        img.addEventListener("error", () => {
+          console.log(`[PB] ${team} emblem FAILED:`, img.src);
+        });
+
+        el.innerHTML = "";
+        el.appendChild(img);
+      }
+
+      // IMPORTANT: do NOT add ?v=timestamp (Imgur can be picky)
+      img.src = clean;
+    }
+
+
+
+    function applyScoreboardColumnTranslations() {
+      if (!Config || !Config.Translations || !Config.Translations.menu) return;
+      var menu = Config.Translations.menu;
+
+      var head = document.getElementById('table-head');
+      if (!head) return;
+
+      var playerCell = head.querySelector('.c-player');
+      var scoreCell  = head.querySelector('.c-score');
+      var kCell      = head.querySelector('.c-k');
+      var dCell      = head.querySelector('.c-d');
+      var ptsCell    = head.querySelector('.c-pts');
+
+      if (playerCell && menu.sb_player)       playerCell.textContent = menu.sb_player;
+      if (scoreCell  && menu.sb_score)        scoreCell.textContent  = menu.sb_score;
+      if (kCell      && menu.sb_kills_short)  kCell.textContent      = menu.sb_kills_short;
+      if (dCell      && menu.sb_deaths_short) dCell.textContent      = menu.sb_deaths_short;
+      if (ptsCell    && menu.sb_points)       ptsCell.textContent    = menu.sb_points;
+    }
+
+    $(document).ready(function() {
+      $.post('https://'+ GetParentResourceName() +'/RequestConfig', JSON.stringify({}), function(config) {
+        Config = config;
+        applyKillFeedPosition();
+        applyScoreboardColumnTranslations();
+      });
+    });
+
+    function getModeTitle(key){
+      if (!Config || !Config.Translations || !Config.Translations.menu) return "";
+      return String(Config.Translations.menu[key] || "");
+    }
+
+
+    function isHoldYourOwn(mode){
+      if (!mode) return false;
+      var title = getModeTitle("mode_hyo_title");
+      return String(mode).toLowerCase() === title.toLowerCase();
+    }
+
+    function isKC(mode){
+      if (!mode) return false;
+      var m = String(mode).toLowerCase();
+      var tKC = getModeTitle("mode_kc_title").toLowerCase();
+      return m === tKC || m === "kill confirmed";
+    }
+
+
+    function isFFA(mode){
+      if (!mode) return false;
+      var m = String(mode).toLowerCase();
+
+      var tFFA   = getModeTitle("mode_ffa_title").toLowerCase();
+      var tGG    = getModeTitle("mode_gungame_title").toLowerCase();
+      var tOITC  = getModeTitle("mode_oitc_title").toLowerCase();
+
+      return (
+        m === tFFA ||
+        m === tGG  ||
+        m === tOITC ||
+        m === "ffa"
+      );
+    }
+
+    function isTDM(mode){
+      if (!mode) return false;
+      var m = String(mode).toLowerCase();
+      var tTDM = getModeTitle("mode_tdm_title").toLowerCase();
+      return m === tTDM || m === "tdm";
+    }
+
+
+    function isScoreMode(mode){
+      if (!mode) return false;
+      var m = String(mode).toLowerCase();
+      var tCTF = getModeTitle("mode_ctf_title").toLowerCase();
+      var tKC  = getModeTitle("mode_kc_title").toLowerCase();
+
+      return (
+        m === tCTF || m === "ctf" ||
+        m === tKC  || m === "kill confirmed"
+      );
+    }
+
+
+    function safeKD(k, d){
+      var kills = Number(k)||0, deaths = Number(d)||0;
+      if (deaths === 0) return kills.toFixed(2);
+      return (kills / deaths).toFixed(2);
+    }
+
+    function createRow(team){
+      var row = document.createElement('div');
+      row.className = 'row ' + team;
+      row.innerHTML = `
+        <div class="cell player"></div>
+        <div class="cell right score"></div>
+        <div class="cell right kills"></div>
+        <div class="cell right deaths"></div>
+        <div class="cell right points"></div>`;
+      return row;
+    }
+
+    function clearContainer(el){
+      while(el.firstChild) el.removeChild(el.firstChild);
+    }
+
+    function setHeaderLabels(mode, scoreMode){
+      var h = document.getElementById('table-head');
+      if(!h) return;
+
+      var cs = h.querySelector('.c-score');
+      var ck = h.querySelector('.c-k');
+      var cd = h.querySelector('.c-d');
+
+      var menu = (Config && Config.Translations && Config.Translations.menu) ? Config.Translations.menu : null;
+
+      var kcLabel = (menu && menu.sb_confirms)         || 'CONFIRMS';
+      var livesLabel  = (menu && menu.sb_lives)        || 'LIVES';
+      var scoreLabel  = (menu && menu.sb_score)        || 'SCORE';
+      var killsShort  = (menu && menu.sb_kills_short)  || 'K';
+      var deathsShort = (menu && menu.sb_deaths_short) || 'D';
+      var ctfLabel    = (menu && menu.sb_ctf)          || 'CTF';
+      var kdRatio     = (menu && menu.sb_kd_ratio)     || 'KD';
+
+      if (isHoldYourOwn(mode)) {
+        if (cs) cs.textContent = livesLabel;
+        if (ck) ck.textContent = killsShort;
+        if (cd) cd.textContent = deathsShort;
+        return;
+      }
+
+      if (scoreMode){
+        if (cs) cs.textContent = isKC(mode) ? kcLabel : ctfLabel;
+        if (ck) ck.textContent = killsShort;
+        if (cd) cd.textContent = deathsShort;
+      } else {
+        if (cs) cs.textContent = killsShort;
+        if (ck) ck.textContent = deathsShort;
+        if (cd) cd.textContent = kdRatio;
+      }
+    }
+
+
+
+
+    function fillTeamInto(containerId, list, teamClass, mode, scoreMode){
+      var c = document.getElementById(containerId);
+      clearContainer(c);
+      (list || []).forEach(function(p){
+        if (p && p.name && p.name.trim() !== "") {
+          var r = createRow(teamClass);
+          var k = p.kills  || 0;
+          var d = p.deaths || 0;
+
+          var playerCell = r.querySelector('.player');
+          var level = p.level || 1;
+          var prestige = p.prestige || 0;
+          var iconName = p.prestigeIcon || ("prestige_" + String(prestige));
+          var iconHTML = "";
+
+          if (iconName) {
+            var iconURL = "https://cfx-nui-pug-paintball/html_dui/prestige_icons/" + iconName + ".png";
+            iconHTML = '<img class="player-rank-icon" src="'+iconURL+'" onerror="this.style.display=\'none\'" />';
+          }
+
+          var levelText = level;
+
+          playerCell.innerHTML = (
+            '<div class="player-rank-wrap">' +
+              iconHTML +
+              '<span class="player-rank-text">'+ levelText +'</span>' +
+              '<span class="player-name-text">'+ (p.name || '') +'</span>' +
+            '</div>'
+          );
+
+          if (isHoldYourOwn(mode)){
+            var lives = typeof p.livesLeft === 'number' ? p.livesLeft : (p.livesLeft || 0);
+            r.querySelector('.score').textContent  = lives;
+            r.querySelector('.kills').textContent  = k;
+            r.querySelector('.deaths').textContent = d;
+          } else if (scoreMode){
+            r.querySelector('.score').textContent  = p.score || 0;
+            r.querySelector('.kills').textContent  = k;
+            r.querySelector('.deaths').textContent = d;
+          } else {
+            r.querySelector('.score').textContent  = k;
+            r.querySelector('.kills').textContent  = d;
+            r.querySelector('.deaths').textContent = safeKD(k, d);
+          }
+
+          r.querySelector('.points').textContent = p.points || 0;
+          c.appendChild(r);
+        }
+      });
+    }
+
+
+
+    function setVisible(show){
+      var ui = document.getElementById('pball-ui');
+      if(show){ $(ui).fadeIn(300) } else { $(ui).fadeOut(300) }
+    }
+
+    function alignTeams(mode){
+      var head  = document.getElementById('table-head');
+      var redC  = document.getElementById('rows-red');
+      var blueC = document.getElementById('rows-blue');
+
+      if (isFFA(mode)) {
+        redC.style.marginTop  = '0px';
+        blueC.style.display   = 'none';
+        return;
+      }
+
+      blueC.style.display = '';
+
+      var headBottom = head.getBoundingClientRect().bottom;
+      var redTop = document.querySelector('.team.red').getBoundingClientRect().top;
+      var blueTop = document.querySelector('.team.blue').getBoundingClientRect().top;
+
+      var redOffset  = Math.max(0, Math.round(redTop  - headBottom));
+      var blueOffset = Math.max(0, Math.round(blueTop - headBottom));
+
+      redC.style.marginTop  = redOffset  + 'px';
+      blueC.style.marginTop = blueOffset + 'px';
+    }
+
+    function updateFFAExtras(mode, redList, blueList){
+      var board = document.getElementById('board');
+      var podium = document.getElementById('podium');
+
+      if(isFFA(mode)){
+        board.classList.add('ffa');
+        podium.classList.remove('hidden');
+
+        var all = (redList||[]).concat(blueList||[]);
+        var g = all[0] || {name:'—', kills:0};
+        var s = all[1] || {name:'—', kills:0};
+        var b = all[2] || {name:'—', kills:0};
+
+        document.getElementById('gold-name').textContent   = g.name   || '—';
+        document.getElementById('gold-pts').textContent    = g.kills || 0;
+        document.getElementById('silver-name').textContent = s.name   || '—';
+        document.getElementById('silver-pts').textContent  = s.kills || 0;
+        document.getElementById('bronze-name').textContent = b.name   || '—';
+        document.getElementById('bronze-pts').textContent  = b.kills || 0;
+      }else{
+        board.classList.remove('ffa');
+        podium.classList.add('hidden');
+      }
+    }
+
+    function renderScoreboard(){
+      if (!lastScoreboardPacket) return;
+
+      var packet = lastScoreboardPacket;
+      var mode   = packet.data.mode || getModeTitle("mode_hyo_title");
+      var scoreMode = isScoreMode(mode) && !isFFA(mode);
+
+      document.getElementById('pball-mode').textContent = mode;
+      document.getElementById('pball-RedScore').textContent  = packet.data.rScore || 0;
+      document.getElementById('pball-BlueScore').textContent = packet.data.bScore || 0;
+
+      applyTeamMeta(packet.data.teamMeta || null);
+
+      setHeaderLabels(mode, scoreMode);
+
+      fillTeamInto('rows-red',  packet.data.red  || [], 'red',  mode, scoreMode);
+      fillTeamInto('rows-blue', packet.data.blue || [], 'blue', mode, scoreMode);
+
+      updateFFAExtras(mode, packet.data.red, packet.data.blue);
+      alignTeams(mode);
+      setVisible(true);
+    }
+
+
+
+    function UpdatePBUI(type, packet){
+      if (type !== 'scoreboard') return;
+
+      if (packet.active) {
+        if (!PBallActive) PBallActive = true;
+        lastScoreboardPacket = packet;
+        renderScoreboard();
+      } else {
+        PBallActive = false;
+        setVisible(false);
+      }
+    }
+
+
+
+
+    window.addEventListener('resize', function(){
+      var modeEl = document.getElementById('pball-mode');
+      alignTeams(modeEl ? modeEl.textContent : '');
+    });
+
+    window.addEventListener('message', function(e){
+      var d = e.data || {};
+      if (d.action === 'Update') {
+        UpdatePBUI(d.type, d);
+      } else if (d.action === 'KillFeed') {
+        addKillFeedEntry(d);
+      } else if (d.action === 'KillFeedClear') {
+        clearKillFeed();
+      } else if (d.action === 'MatchTimerUpdate') {
+        updateMatchTimerBar(d.seconds || 0);
+      } else if (d.action === 'MatchTimerHide') {
+        hideMatchTimerBar();
+      } else if (d.action === 'RankUp') {
+        // d.data contains the payload from the client event
+        showRankUp(d.data || d);
+      } else if (d.action == "PlaySound") {
+        audioPlayer = new Howl({src: ["./sounds/" + d.audio]});
+        audioPlayer.volume(d.volume);
+        audioPlayer.play();
+      }
+    });
+
+
+
+
+
+    // KILL FEED UI
+    function applyKillFeedPosition() {
+        if (!Config || !Config.KillFeedPosition) return;
+
+        const wrap = document.getElementById("killfeed");
+        if (!wrap) return;
+
+        // Reset all positioning
+        wrap.style.top = "";
+        wrap.style.bottom = "";
+        wrap.style.left = "";
+        wrap.style.right = "";
+        wrap.style.transform = "";
+
+        const pos = Config.KillFeedPosition.toLowerCase();
+
+        switch (pos) {
+
+            case "top-left":
+                wrap.style.top = "12vh";
+                wrap.style.left = "3vh";
+                break;
+
+            case "top-right":
+                wrap.style.top = "12vh";
+                wrap.style.right = "3vh";
+                break;
+
+            case "bottom-left":
+                wrap.style.bottom = "8vh";
+                wrap.style.left = "3vh";
+                break;
+
+            case "bottom-right":
+                wrap.style.bottom = "8vh";
+                wrap.style.right = "3vh";
+                break;
+
+            case "middle-left":
+                wrap.style.top = "50%";
+                wrap.style.left = "3vh";
+                wrap.style.transform = "translateY(-50%)";
+                break;
+
+            case "middle-right":
+                wrap.style.top = "50%";
+                wrap.style.right = "3vh";
+                wrap.style.transform = "translateY(-50%)";
+                break;
+        }
+    }
+
+    function addKillFeedEntry(data){
+      var wrap = document.getElementById('killfeed');
+      if(!wrap) return;
+
+      var row = document.createElement('div');
+      row.className = 'kf-row';
+
+      var killer = (data.killer || '').toString();
+      var victim = (data.victim || '').toString();
+      var weapon = (data.weapon || '').toString().toLowerCase();
+
+      var killerColor = (data.killerColor || '').toString();
+      var victimColor = (data.victimColor || '').toString();
+      var headshot    = !!data.headshot;
+
+      var imgSrc = weapon ? ('weapon_icons/' + weapon + '.png') : '';
+
+      var killerStyle = killerColor !== '' ? ' style="color:'+killerColor+';"' : '';
+      var victimStyle = victimColor !== '' ? ' style="color:'+victimColor+';"' : '';
+
+      row.innerHTML =
+        '<div class="kf-name kf-killer"' + killerStyle + '>' + killer + '</div>' +
+        (weapon ? '<img class="kf-weapon" src="' + imgSrc + '" onerror="this.style.display=\'none\'" />' : '') +
+        (headshot ? '<img class="kf-weapon" src="weapon_icons/headshot.png" />' : '') +
+        '<div class="kf-name kf-victim"' + victimStyle + '>' + victim + '</div>';
+
+      wrap.appendChild(row);
+
+      while (wrap.children.length > 5){
+        wrap.removeChild(wrap.firstChild);
+      }
+
+      setTimeout(function(){
+        if (row.parentNode === wrap){
+          wrap.removeChild(row);
+        }
+      }, 5000);
+    }
+
+    function clearKillFeed(){
+      var wrap = document.getElementById('killfeed');
+      if(!wrap) return;
+      while (wrap.firstChild) wrap.removeChild(wrap.firstChild);
+    }
+
+
+
+
+    function updateMatchTimerBar(totalSec){
+      const el = document.getElementById('pb-match-timer');
+      if (!el) return;
+
+      if (totalSec <= 0){
+        el.style.display = 'none';
+        return;
+      }
+
+      let hours = Math.floor(totalSec / 3600);
+      let minutes = Math.floor((totalSec % 3600) / 60);
+      let seconds = totalSec % 60;
+
+      let text = "";
+
+      if (hours > 0) {
+        // H:MM:SS
+        text = `${hours}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+      } else if (minutes > 0) {
+        // M:SS
+        text = `${minutes}:${String(seconds).padStart(2,'0')}`;
+      } else {
+        // S
+        text = `${seconds}`;
+      }
+
+      el.textContent = text;
+      el.style.display = 'block';
+    }
+
+
+    function hideMatchTimerBar(){
+      const el = document.getElementById('pb-match-timer');
+      if (!el) return;
+      el.style.display = 'none';
+    }
+
+    // RANK UP CODE
+    let rankupTimeout = null;
+    function showRankUp(data){
+      const overlay = document.getElementById('rankup-overlay');
+      if (!overlay) return;
+
+      const oldLevel    = data.oldLevel    || 1;
+      const oldPrestige = data.oldPrestige || 0;
+      const newLevel    = data.newLevel    || oldLevel;
+      const newPrestige = data.newPrestige || oldPrestige;
+      const xpInto      = data.xpIntoLevel || 0;
+      const xpForNext   = data.xpForNext   || 0;
+      const totalXP     = data.totalXPAfter || data.totalXP || 0;
+
+      const oldText = document.getElementById('rankup-old-text');
+      const newText = document.getElementById('rankup-new-text');
+      const xpText  = document.getElementById('rankup-xp-text');
+      const oldIcon = document.getElementById('rankup-old-icon');
+      const newIcon = document.getElementById('rankup-new-icon');
+      const fill    = document.getElementById('rankup-progress-fill');
+
+      if (!oldText || !newText || !xpText || !oldIcon || !newIcon || !fill) return;
+
+      // labels like: P3 • Lv 24  ->  P3 • Lv 25  (or P3 • Lv 50 -> P4 • Lv 1)
+      // Format prestige: show nothing if 0, otherwise just the number
+      const oldPrestigeText = oldPrestige > 0 ? `${oldPrestige} • ` : "";
+      const newPrestigeText = newPrestige > 0 ? `${newPrestige} • ` : "";
+
+      // Apply final label text
+      oldText.textContent = `${oldPrestigeText}Lv ${oldLevel}`;
+      newText.textContent = `${newPrestigeText}Lv ${newLevel}`;
+
+
+      if (xpForNext > 0) {
+        xpText.textContent = `${xpInto} / ${xpForNext} XP this level`;
+      } else {
+        xpText.textContent = `${totalXP} XP (MAX)`;
+      }
+
+      // ==== ICON LOGIC ====
+      // If prestige did NOT change: show the current prestige icon on BOTH sides.
+      // If prestige DID change: show old prestige icon on left, new prestige icon on right.
+      const samePrestige = (oldPrestige === newPrestige);
+
+      if (samePrestige) {
+        // current prestige icon for both
+        const currentIconName =
+          data.newIcon ||
+          data.oldIcon ||
+          `prestige_${newPrestige}`;
+        const baseURL = 'https://cfx-nui-pug-paintball/html_dui/prestige_icons/';
+
+        // no prestige change
+        if (samePrestige) {
+            oldIcon.src = `${baseURL}${currentIconName}.png`;
+            newIcon.src = `${baseURL}${currentIconName}.png`;
+        } 
+        // prestige changed
+        else {
+            oldIcon.src = `${baseURL}${oldIconName}.png`;
+            newIcon.src = `${baseURL}${newIconName}.png`;
+        }
+      } else {
+        // transitioning prestige: old -> new
+        const oldIconName = data.oldIcon || `prestige_${oldPrestige}`;
+        const newIconName = data.newIcon || `prestige_${newPrestige}`;
+
+        const baseURL = 'https://cfx-nui-pug-paintball/html_dui/prestige_icons/';
+
+        // no prestige change
+        if (samePrestige) {
+            oldIcon.src = `${baseURL}${currentIconName}.png`;
+            newIcon.src = `${baseURL}${currentIconName}.png`;
+        } 
+        // prestige changed
+        else {
+            oldIcon.src = `${baseURL}${oldIconName}.png`;
+            newIcon.src = `${baseURL}${newIconName}.png`;
+        }
+      }
+      // =====================
+
+      // reset progress
+      fill.style.transition = 'none';
+      fill.style.width = '0%';
+      void fill.offsetWidth; // reflow
+
+      let pct = 100;
+      if (xpForNext > 0 && xpInto >= 0) {
+        pct = Math.max(0, Math.min(100, Math.floor((xpInto / xpForNext) * 100)));
+      }
+
+      // show popup
+      overlay.classList.remove('hidden');
+      overlay.classList.add('show');
+      audioPlayer = new Howl({src: ["./sounds/rankup.ogg"]});
+      audioPlayer.volume(0.1);
+      audioPlayer.play();
+
+      // animate fill
+      setTimeout(function(){
+        fill.style.transition = 'width 0.6s ease-out';
+        fill.style.width = pct + '%';
+      }, 60);
+
+      // auto-hide
+      if (rankupTimeout) clearTimeout(rankupTimeout);
+      rankupTimeout = setTimeout(function(){
+        overlay.classList.remove('show');
+        overlay.classList.add('hidden');
+        fill.style.width = '0%';
+      }, 4000);
+    }
+
+
+
+
+
+    function hexToRgba(hex, alpha){
+      if (!hex) return null;
+      let h = hex.toString().trim();
+      if (h[0] === '#') h = h.slice(1);
+      if (h.length === 3){
+        h = h[0]+h[0] + h[1]+h[1] + h[2]+h[2];
+      }
+      if (h.length !== 6) return null;
+      const r = parseInt(h.slice(0,2), 16);
+      const g = parseInt(h.slice(2,4), 16);
+      const b = parseInt(h.slice(4,6), 16);
+      if (isNaN(r) || isNaN(g) || isNaN(b)) return null;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    }
+
+    function applyTeamMeta(meta){
+      const root      = document.documentElement;
+      const redLabel  = document.querySelector('.team.red  .teamlabel');
+      const blueLabel = document.querySelector('.team.blue .teamlabel');
+
+      // If meta is missing for a frame, do NOT wipe the logo (prevents blinking)
+      if (meta && meta.red)  setEmblem("red",  meta.red.logo_url);
+      if (meta && meta.blue) setEmblem("blue", meta.blue.logo_url);
+
+
+      // defaults
+      const defaultRedName   = 'RED TEAM';
+      const defaultBlueName  = 'BLUE TEAM';
+      const defaultRedTint   = 'rgba(120, 30, 38, .35)';
+      const defaultBlueTint  = 'rgba(35, 85, 125, .35)';
+
+      const defaultRedRow    = 'rgba(160,45,55,.05)';
+      const defaultBlueRow   = 'rgba(45,100,150,.05)';
+
+      const defaultRedEmblemGrad  = 'radial-gradient(circle at 35% 35%, rgba(255,90,90,.144), rgba(140,0,0,.144) 60%, rgba(0,0,0,.3))';
+      const defaultBlueEmblemGrad = 'radial-gradient(circle at 35% 35%, rgba(100,150,255,.144), rgba(0,50,140,.144) 60%, rgba(0,0,0,.3))';
+
+      const defaultRedGlow   = 'rgba(255, 60, 60, 0.144)';
+      const defaultBlueGlow  = 'rgba(60, 99, 255, 0.144)';
+
+      // RED label
+      if (meta && meta.red && meta.red.name && redLabel){
+        redLabel.textContent = meta.red.name;
+      } else if (redLabel){
+        redLabel.textContent = defaultRedName;
+      }
+
+      // BLUE label
+      if (meta && meta.blue && meta.blue.name && blueLabel){
+        blueLabel.textContent = meta.blue.name;
+      } else if (blueLabel){
+        blueLabel.textContent = defaultBlueName;
+      }
+
+      // --- RED side colors ---
+      if (meta && meta.red && meta.red.color_hex){
+        const tint  = hexToRgba(meta.red.color_hex, 0.35) || defaultRedTint;
+        const row   = hexToRgba(meta.red.color_hex, 0.07) || defaultRedRow;
+        const inner = hexToRgba(meta.red.color_hex, 0.15) || row;
+        const outer = hexToRgba(meta.red.color_hex, 0.35) || tint;
+        const glow  = hexToRgba(meta.red.color_hex, 0.25) || defaultRedGlow;
+
+        root.style.setProperty('--red-tint', tint);
+        root.style.setProperty('--red-row-bg', row);
+        root.style.setProperty(
+          '--red-emblem-grad',
+          `radial-gradient(circle at 35% 35%, ${inner}, ${outer} 60%, rgba(0,0,0,.3))`
+        );
+        root.style.setProperty('--red-emblem-glow', glow);
+      } else {
+        root.style.setProperty('--red-tint', defaultRedTint);
+        root.style.setProperty('--red-row-bg', defaultRedRow);
+        root.style.setProperty('--red-emblem-grad', defaultRedEmblemGrad);
+        root.style.setProperty('--red-emblem-glow', defaultRedGlow);
+      }
+
+      // --- BLUE side colors ---
+      if (meta && meta.blue && meta.blue.color_hex){
+        const tint  = hexToRgba(meta.blue.color_hex, 0.35) || defaultBlueTint;
+        const row   = hexToRgba(meta.blue.color_hex, 0.07) || defaultBlueRow;
+        const inner = hexToRgba(meta.blue.color_hex, 0.15) || row;
+        const outer = hexToRgba(meta.blue.color_hex, 0.35) || tint;
+        const glow  = hexToRgba(meta.blue.color_hex, 0.25) || defaultBlueGlow;
+
+        root.style.setProperty('--blue-tint', tint);
+        root.style.setProperty('--blue-row-bg', row);
+        root.style.setProperty(
+          '--blue-emblem-grad',
+          `radial-gradient(circle at 35% 35%, ${inner}, ${outer} 60%, rgba(0,0,0,.3))`
+        );
+        root.style.setProperty('--blue-emblem-glow', glow);
+      } else {
+        root.style.setProperty('--blue-tint', defaultBlueTint);
+        root.style.setProperty('--blue-row-bg', defaultBlueRow);
+        root.style.setProperty('--blue-emblem-grad', defaultBlueEmblemGrad);
+        root.style.setProperty('--blue-emblem-glow', defaultBlueGlow);
+      }
+    }
+
+
+  </script>
+
+</body>
+</html>
