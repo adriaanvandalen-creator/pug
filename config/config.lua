@@ -54,6 +54,7 @@ Config.PaintballIsABusiness = false -- Sends 15% of wagers to the business accou
 Config.EnableGTA5Crosshair = true -- Disable to hide GTA V’s default crosshair during matches
 Config.UsingCrossHairByDefault = false -- Enable if your server always uses crosshairs by default
 Config.DoScreenFadeOut = true -- Fades the screen out at the end of the match
+Config.WeaponHandWatchdog = false -- Re-gives the match weapon if you end up unarmed / blocks hands-up; can make the weapon flicker with ox_inventory
 ------------------------------
 Config.PedLocation = vector4(-1283.4, -299.2, 35.04, 180.0) -- Location of the ped players interact with to join the game
 Config.ArenaPed = 'u_m_y_pogo_01' -- Model used for the join-game ped

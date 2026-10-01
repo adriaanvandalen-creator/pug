@@ -897,6 +897,9 @@ end)
 -- back. Skips the check while parachuting / dead / falling.
 -- ============================================================================
 RegisterNetEvent("Pug:paintball:PutWeaponHandCheck", function()
+  -- Off by default: it never ran in the original release (it crashed on IsPedHandsUp)
+  -- and it fights inventory scripts, making the weapon flicker.
+  if not Config.WeaponHandWatchdog then return end
   local unarmedSince = nil
   while isInMatch do
     Wait(0)
