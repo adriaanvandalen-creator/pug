@@ -345,14 +345,9 @@ RegisterNetEvent('Pug:client:ViewLobby', function(data)
             return
         end
     end
-    local wasabiResource = GetWasabiAmbulanceResource()
-    if wasabiResource then
-        local PlayerID = GetPlayerServerId(PlayerId())
-        local ok, dead = pcall(function() return exports[wasabiResource]:isPlayerDead(PlayerID) end)
-        if ok and dead then
-            PaintBallNotify(Config.Translations.error.cannot_join_down, 'error')
-            return
-        end
+    if IsWasabiDead() then
+        PaintBallNotify(Config.Translations.error.cannot_join_down, 'error')
+        return
     end
 
     if data and data.data then data.args = data.data end

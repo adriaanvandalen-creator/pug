@@ -209,6 +209,7 @@ function EndMatch(lobbyId, winnerTeam, reason)
     -- DisableKeys (false) displays the NUI scoreboard and locks combat controls
     -- for ~10 s. removeFromArena waits 4 s internally before fading and teleporting.
     for _, src in ipairs(allAtEnd) do
+        PaintballReviveGrace[src] = os.time() + 30 -- may still be dead from the final kill
         TriggerClientEvent("Pug:client:DisableKeys", src, false)
         TriggerClientEvent("Pug:paintball:removeFromArena", src)
     end

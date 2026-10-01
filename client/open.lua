@@ -785,6 +785,67 @@ RegisterNetEvent("Pug:client:PlayPaintballClientSound", function(Sound, Volume)
     PugSoundPlay(Sound, Volume)
 end)
 
+-- Wasabi Ambulance V2 marks a downed player with the `isDead` state bag (> 0 = dead or last stand)
+-- and only revives when the server asks it to (RevivePlayer export).
+local function IsWasabiDeadValue(value)
+    return value == true or (type(value) == 'number' and value > 0)
+end
+
+function IsWasabiDead()
+    local wasabiResource = GetWasabiAmbulanceResource()
+    if not wasabiResource then return false end
+    if IsWasabiDeadValue(LocalPlayer.state.isDead) then return true end
+    local ok, dead = pcall(function() return exports[wasabiResource]:isPlayerDead(GetPlayerServerId(PlayerId())) end)
+    return ok and IsWasabiDeadValue(dead)
+end
+
+local wasabiReviveRunning = false
+local wasabiReviveUntil = 0
+local function RequestWasabiRevive(PlayerHeadingSet)
+    wasabiReviveUntil = GetGameTimer() + 6000
+    TriggerServerEvent('Pug:server:PaintballWasabiRevive')
+    if wasabiReviveRunning then return end
+    wasabiReviveRunning = true
+    CreateThread(function()
+        -- Keep asking until Wasabi lets go of us.
+        local dead
+        repeat
+            Wait(1000)
+            dead = IsWasabiDead()
+            if dead then TriggerServerEvent('Pug:server:PaintballWasabiRevive') end
+        until not dead or GetGameTimer() >= wasabiReviveUntil
+        wasabiReviveRunning = false
+        if dead then return end
+        local ped = PlayerPedId()
+        if PlayerHeadingSet then SetEntityHeading(ped, PlayerHeadingSet) end
+        if DeathCooldown then -- CTF death cam: stay hidden until the countdown respawns us
+            FreezeEntityPosition(ped, true)
+            SetEntityVisible(ped, false)
+        end
+    end)
+end
+
+local function ResurrectAndHeal(PlayerHeadingSet)
+    local ped = PlayerPedId()
+    if IsEntityDead(ped) then
+        local coords = GetEntityCoords(ped)
+        NetworkResurrectLocalPlayer(coords.x, coords.y, coords.z, PlayerHeadingSet or GetEntityHeading(ped), true, false)
+        ped = PlayerPedId()
+        ClearPedTasksImmediately(ped)
+    end
+    ClearPedBloodDamage(ped)
+    SetEntityHealth(ped, GetEntityMaxHealth(ped))
+end
+
+-- Paintball handles its own deaths, so the moment Wasabi puts us on its death screen
+-- during a match, get revived and let the paintball respawn take over.
+AddStateBagChangeHandler('isDead', nil, function(bagName, _, value)
+    if bagName ~= ('player:%s'):format(GetPlayerServerId(PlayerId())) then return end
+    if not isInMatch or not IsWasabiDeadValue(value) then return end
+    if not GetWasabiAmbulanceResource() then return end
+    RequestWasabiRevive()
+end)
+
 RegisterNetEvent("Pug:client:PaintballReviveEvent", function(PlayerHeadingSet)
     if GetResourceState('ambulancejob') == 'started' then
         TriggerEvent('ambulancejob:healPlayer', {revive = true}) -- to heal player
@@ -797,31 +858,15 @@ RegisterNetEvent("Pug:client:PaintballReviveEvent", function(PlayerHeadingSet)
         TriggerEvent('ak47_ambulancejob:revive') 
         TriggerEvent('ak47_ambulancejob:skellyfix') 
     elseif GetWasabiAmbulanceResource() then
-        -- Wasabi Ambulance V2 ignores revive events triggered by other client resources,
-        -- so ask the server to revive us (export / server-sent event) and keep the old
-        -- client-side events for V1.
-        TriggerServerEvent('Pug:server:PaintballWasabiRevive')
-        TriggerEvent('wasabi_ambulance:revive')
-        if Framework == "QBCore" then
-            TriggerEvent('hospital:client:Revive')
+        if IsWasabiDead() then
+            RequestWasabiRevive(PlayerHeadingSet)
         else
-            TriggerEvent('esx_ambulancejob:revive')
+            ResurrectAndHeal(PlayerHeadingSet)
         end
-        CreateThread(function()
-            -- Last resort: if we are still dead after the revive request, resurrect natively.
-            Wait(1500)
-            local ped = PlayerPedId()
-            if IsEntityDead(ped) or IsPedFatallyInjured(ped) then
-                local coords = GetEntityCoords(ped)
-                local heading = PlayerHeadingSet or GetEntityHeading(ped)
-                NetworkResurrectLocalPlayer(coords.x, coords.y, coords.z, heading, true, false)
-                ped = PlayerPedId()
-                ClearPedTasksImmediately(ped)
-                ClearPedBloodDamage(ped)
-                SetEntityHealth(ped, GetEntityMaxHealth(ped))
-            end
-            if PlayerHeadingSet then SetEntityHeading(PlayerPedId(), PlayerHeadingSet) end
-        end)
+        if GetWasabiAmbulanceResource() == 'wasabi_ambulance' then -- V1
+            TriggerEvent('esx_ambulancejob:revive')
+            TriggerEvent('wasabi_ambulance:revive')
+        end
     elseif GetResourceState('ars_ambulancejob') == 'started' then
         Wait(1000)
         TriggerEvent('ars_ambulancejob:healPlayer', {revive = true}) -- to revive player

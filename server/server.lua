@@ -213,6 +213,7 @@ end, false)
 -- [REPAIRED]: Calls CleanupPlayerFromLobbies (defined in sv_lobby.lua) on drop.
 AddEventHandler('playerDropped', function()
     local src = source
+    PaintballReviveGrace[src] = nil
     Citizen.CreateThread(function()
         Wait(0)
         if CleanupPlayerFromLobbies then
@@ -222,17 +223,22 @@ AddEventHandler('playerDropped', function()
 end)
 
 -- Wasabi Ambulance V2 only accepts revives coming from the server, so the client asks us
--- to revive it when it respawns in a paintball match.
+-- to revive it while it is in a match (or just left one, see EndMatch).
+PaintballReviveGrace = PaintballReviveGrace or {}
+
 RegisterNetEvent("Pug:server:PaintballWasabiRevive", function()
     local src = source
     local lid = PlayerLobby[src]
-    if not lid or not Lobbies[lid] or not Lobbies[lid].started then return end
+    local inMatch = lid and Lobbies[lid] and Lobbies[lid].started
+    local inGrace = PaintballReviveGrace[src] and PaintballReviveGrace[src] >= os.time()
+    if not inMatch and not inGrace then return end
 
     local wasabiResource = GetWasabiAmbulanceResource()
     if not wasabiResource then return end
 
-    local ok = pcall(function() exports[wasabiResource]:RevivePlayer(src) end)
+    local ok, err = pcall(function() exports[wasabiResource]:RevivePlayer(src) end)
     if not ok then
+        if Config.Debug then print("[pug-paintball] " .. wasabiResource .. ":RevivePlayer failed: " .. tostring(err)) end
         TriggerClientEvent("wasabi_ambulance:revive", src)
     end
 end)
