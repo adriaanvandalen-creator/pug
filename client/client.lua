@@ -665,6 +665,11 @@ function(mapName, oitcLives, gameMode, teamPlayers, randomWeapons,
   if GetResourceState("jaksam_inventory") == "started" then
     exports.jaksam_inventory:setWeaponWheel(true)
   end
+  -- ox_inventory: let us hand out weapons during the match instead of disarming
+  -- anything it didn't equip itself (that caused the weapon to flicker).
+  if GetResourceState("ox_inventory") == "started" then
+    pcall(function() exports.ox_inventory:weaponWheel(true) end)
+  end
 
   -- Snapshot baseline state we'll need to restore on match end.
   savedPlayerHealth  = GetEntityHealth(PlayerPedId())
@@ -991,6 +996,9 @@ RegisterNetEvent("Pug:paintball:removeFromArena", function()
 
   if GetResourceState("jaksam_inventory") == "started" then
     exports.jaksam_inventory:setWeaponWheel(false)
+  end
+  if GetResourceState("ox_inventory") == "started" then
+    pcall(function() exports.ox_inventory:weaponWheel(false) end)
   end
 
   if isInMatch then
@@ -2774,4 +2782,12 @@ end)
 
 RegisterNetEvent("Pug:client:KC:ClearAll", function()
   clearAllKcTags()
+end)
+
+-- Hand weapon control back to ox_inventory if the resource stops mid-match.
+AddEventHandler("onResourceStop", function(resourceName)
+  if resourceName ~= GetCurrentResourceName() or not isInMatch then return end
+  if GetResourceState("ox_inventory") == "started" then
+    pcall(function() exports.ox_inventory:weaponWheel(false) end)
+  end
 end)
