@@ -2106,10 +2106,12 @@ end)
 -- ============================================================================
 -- CTF — FLAG SPAWN / BLIP MAINTENANCE
 -- ============================================================================
-RegisterNetEvent("Pug:paintball:SpawnFlagLocation", function(redCoord, blueCoord)
+local function setFlagSpawnCoords(redCoord, blueCoord)
   redFlagSpawnCoords  = redCoord
   blueFlagSpawnCoords = blueCoord
-end)
+end
+RegisterNetEvent("Pug:paintball:SpawnFlagLocation", setFlagSpawnCoords)
+RegisterNetEvent("Pug:CTF:FlagPositions", setFlagSpawnCoords) -- what sv_ctf.lua actually sends
 
 RegisterNetEvent("Pug:paintball:UpdateFlagBlip", function(coord, colour)
   if colour == "red" then
@@ -2232,6 +2234,10 @@ RegisterNetEvent("Pug:client:CaptureTheFlagLoop", function()
   else
     homeFlagCoords = Config.BlueFlagLocation[currentMapName].Coords
   end
+
+  -- Fall back to the configured pedestals if the server's flag positions never arrived.
+  redFlagSpawnCoords  = redFlagSpawnCoords  or Config.RedFlagLocation[currentMapName].Coords
+  blueFlagSpawnCoords = blueFlagSpawnCoords or Config.BlueFlagLocation[currentMapName].Coords
 
   while true do
     Wait(100)

@@ -248,6 +248,9 @@ end)
 CreateThread(function()
     Wait(5000)
     print("^2[pug-paintball] Wasabi Ambulance V2 respawn fix loaded^7")
+    if GetCurrentResourceName() ~= "pug-paintball" then
+        print(("^1[PUG WARNING]^7: this resource is named ^3%s^7 but must be named ^3pug-paintball^7 (UI images and the Wasabi death check use that name). Rename the folder and make sure no other copy of pug-paintball is started.^7"):format(GetCurrentResourceName()))
+    end
     local wasabiResource = GetWasabiAmbulanceResource()
     if not wasabiResource then return end
     local listeners = LoadResourceFile(wasabiResource, 'bridge/listeners/client.lua')
