@@ -892,6 +892,7 @@ end)
 -- back. Skips the check while parachuting / dead / falling.
 -- ============================================================================
 RegisterNetEvent("Pug:paintball:PutWeaponHandCheck", function()
+  local unarmedSince = nil
   while isInMatch do
     Wait(0)
     if not isInMatch then break end
@@ -900,16 +901,19 @@ RegisterNetEvent("Pug:paintball:PutWeaponHandCheck", function()
 
     -- Block hands-up entirely during a match: cancel the task the moment it
     -- is detected so the animation never completes and the weapon stays in hand.
-    if GetIsTaskActive(ped, 0) -- CTaskHandsUp
-       or IsEntityPlayingAnim(ped, "missminuteman_1ig_2", "handsup_base", 3) then
+    if IsEntityPlayingAnim(ped, "missminuteman_1ig_2", "handsup_base", 3) then
       ClearPedTasksImmediately(ped)
       GiveThePlayerTheWeapon()
       Wait(100)
 
     -- Unarmed fallback: catches any other path that strips the weapon
     -- (parachute glitch, death animation, etc.).
+    -- Only after being unarmed for over a second, and at most every 2 seconds, so it
+    -- never fights a weapon swap or the inventory script.
     elseif GetSelectedPedWeapon(ped) == GetHashKey("weapon_unarmed") then
-      if DoesEntityExist(ped) and not IsEntityDead(ped)
+      unarmedSince = unarmedSince or GetGameTimer()
+      if GetGameTimer() - unarmedSince > 1000
+         and DoesEntityExist(ped) and not IsEntityDead(ped)
          and not IsPedInParachuteFreeFall(ped)
          and not IsPedFalling(ped)
          and (GetPedParachuteState(ped) == -1 or GetPedParachuteState(ped) == 0)
@@ -919,10 +923,14 @@ RegisterNetEvent("Pug:paintball:PutWeaponHandCheck", function()
         if CheckMatchingGameMode("One_In_The_Chamber") then
           SetEntityHealth(PlayerPedId(), 107)
         end
+        unarmedSince = nil
+        Wait(2000)
+      else
+        Wait(200)
       end
-      Wait(200)
 
     else
+      unarmedSince = nil
       Wait(100)
     end
   end
