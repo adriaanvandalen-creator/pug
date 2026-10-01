@@ -1715,6 +1715,9 @@ local function onLocalDamageEvent(event, payload)
       if Config.PassiveModeCoolDownWaitTime ~= 0 then
         SetEntityInvincible(PlayerPedId(), true)
         SetEntityAlpha     (PlayerPedId(), 150)
+        -- Started here (not at the end of this sequence) so an error further down can
+        -- never leave the player stuck invincible and see-through.
+        TriggerEvent("Pug:client:RemovePassiveModePB")
       end
 
       DoScreenFadeIn(1000)
@@ -1733,12 +1736,9 @@ local function onLocalDamageEvent(event, payload)
         if not getLivesForLocalPlayer() then
           channel = (playerTeam == "redteam") and 945 or 900
         end
-        exports["pma-voice"]:setRadioChannel(channel)
-      end
-
-      Wait(500)
-      if Config.PassiveModeCoolDownWaitTime ~= 0 then
-        TriggerEvent("Pug:client:RemovePassiveModePB")
+        if channel then  -- pma-voice errors on a nil channel (modes with lives)
+          exports["pma-voice"]:setRadioChannel(channel)
+        end
       end
     end
 
@@ -1754,7 +1754,11 @@ CreateThread(function()
     Wait(250)
     if isInMatch and not IsPlayerDead and not DeathCooldown and not deathHandlerLock
        and isLocalPedDown(PlayerPedId()) then
-      onLocalDamageEvent("CEventNetworkEntityDamage", { PlayerPedId() })
+      local ok, err = pcall(onLocalDamageEvent, "CEventNetworkEntityDamage", { PlayerPedId() })
+      if not ok then
+        print("^1[pug-paintball] death/respawn error: " .. tostring(err) .. "^7")
+        IsPlayerDead = false
+      end
     end
   end
 end)
@@ -1781,10 +1785,11 @@ end)
 -- the gun-select menu mid-passive when configured.
 -- ============================================================================
 RegisterNetEvent("Pug:client:RemovePassiveModePB", function()
-  local ticks = Config.PassiveModeCoolDownWaitTime * 100
-  while ticks > 0 do
-    Wait(1)
-    ticks = ticks - 1
+  -- Time-based (the old frame counter depended on FPS). +2s covers the fade-in that now
+  -- runs after this starts.
+  local passiveUntil = GetGameTimer() + Config.PassiveModeCoolDownWaitTime * 1000 + 2000
+  while GetGameTimer() < passiveUntil do
+    Wait(0)
 
     -- Allow E (control 38) to open the gun-select menu (host-only when set).
     if Config.CanChooseGunMidGame
@@ -1804,7 +1809,7 @@ RegisterNetEvent("Pug:client:RemovePassiveModePB", function()
   end
 
   SetEntityInvincible(PlayerPedId(), false)
-  SetEntityAlpha     (PlayerPedId(), 255)
+  ResetEntityAlpha   (PlayerPedId())
 
   -- Top up health if low after passive ends (skip OITC where low HP is expected).
   if GetEntityHealth(PlayerPedId()) < 200
