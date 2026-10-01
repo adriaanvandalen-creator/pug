@@ -834,6 +834,7 @@ local function ResurrectAndHeal(PlayerHeadingSet)
     local ped = PlayerPedId()
     if IsEntityDead(ped) then
         local coords = GetEntityCoords(ped)
+        print(("[pug-paintball] revive event resurrected you in place at %.1f %.1f %.1f"):format(coords.x, coords.y, coords.z))
         NetworkResurrectLocalPlayer(coords.x, coords.y, coords.z, PlayerHeadingSet or GetEntityHeading(ped), true, false)
         ped = PlayerPedId()
         ClearPedTasksImmediately(ped)
