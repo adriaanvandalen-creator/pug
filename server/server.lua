@@ -247,10 +247,13 @@ end)
 -- Wasabi opens its death screen every time someone dies in a match.
 CreateThread(function()
     Wait(5000)
+    print("^2[pug-paintball] Wasabi Ambulance V2 respawn fix loaded^7")
     local wasabiResource = GetWasabiAmbulanceResource()
     if not wasabiResource then return end
     local listeners = LoadResourceFile(wasabiResource, 'bridge/listeners/client.lua')
-    if listeners and not listeners:find('IsPaintballHandlingDeath', 1, true) then
+    if listeners and listeners:find('IsPaintballHandlingDeath', 1, true) then
+        print(("^2[pug-paintball] %s is set to ignore paintball deaths^7"):format(wasabiResource))
+    elseif listeners then
         print(([[
             ^4========================================================^7
             ^1[PUG WARNING]^7: ^3%s/bridge/listeners/client.lua^7 does not ignore paintball deaths!
