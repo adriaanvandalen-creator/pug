@@ -785,8 +785,10 @@ RegisterNetEvent("Pug:client:PlayPaintballClientSound", function(Sound, Volume)
     PugSoundPlay(Sound, Volume)
 end)
 
--- Wasabi Ambulance V2 marks a downed player with the `isDead` state bag (> 0 = dead or last stand)
--- and only revives when the server asks it to (RevivePlayer export).
+-- Wasabi Ambulance V2 tracks death in the `wasabi:deathState` state bag (0 alive, 1 last stand,
+-- 2 dead) and mirrors it to `isDead` (boolean); it only revives when the server asks it to.
+-- Best setup: make Wasabi ignore paintball deaths in wasabi_ambulance_v2/bridge/listeners/client.lua
+-- (listeners.shouldProcessDeath) using the IsPaintballHandlingDeath export below.
 local function IsWasabiDeadValue(value)
     return value == true or (type(value) == 'number' and value > 0)
 end
@@ -794,28 +796,31 @@ end
 function IsWasabiDead()
     local wasabiResource = GetWasabiAmbulanceResource()
     if not wasabiResource then return false end
+    if IsWasabiDeadValue(LocalPlayer.state['wasabi:deathState']) then return true end
     if IsWasabiDeadValue(LocalPlayer.state.isDead) then return true end
     local ok, dead = pcall(function() return exports[wasabiResource]:isPlayerDead(GetPlayerServerId(PlayerId())) end)
     return ok and IsWasabiDeadValue(dead)
 end
 
 local wasabiReviveRunning = false
-local wasabiReviveUntil = 0
 local function RequestWasabiRevive(PlayerHeadingSet)
-    wasabiReviveUntil = GetGameTimer() + 6000
-    TriggerServerEvent('Pug:server:PaintballWasabiRevive')
     if wasabiReviveRunning then return end
     wasabiReviveRunning = true
     CreateThread(function()
+        -- Wasabi takes a few seconds to resurrect the body and open its death screen. A revive
+        -- that lands before it is done leaves the screen stuck open, so wait for its death pose.
+        local deadline = GetGameTimer() + 8000
+        while not LocalPlayer.state['wasabi:lastStandAnim'] and IsWasabiDead() and GetGameTimer() < deadline do
+            Wait(100)
+        end
+        Wait(500)
         -- Keep asking until Wasabi lets go of us.
-        local dead
-        repeat
+        for _ = 1, 5 do
+            if not IsWasabiDead() then break end
+            TriggerServerEvent('Pug:server:PaintballWasabiRevive')
             Wait(1000)
-            dead = IsWasabiDead()
-            if dead then TriggerServerEvent('Pug:server:PaintballWasabiRevive') end
-        until not dead or GetGameTimer() >= wasabiReviveUntil
+        end
         wasabiReviveRunning = false
-        if dead then return end
         local ped = PlayerPedId()
         if PlayerHeadingSet then SetEntityHeading(ped, PlayerHeadingSet) end
         if DeathCooldown then -- CTF death cam: stay hidden until the countdown respawns us
@@ -893,3 +898,10 @@ local function IsInPaintball()
     return ClosedInfo().ingame
 end
 exports("IsInPaintball", IsInPaintball)
+
+-- For ambulance scripts: true while paintball owns this player's deaths (in a match, or
+-- leaving one until our own revive has run). Return false from their death handling then.
+local function IsPaintballHandlingDeath()
+    return isInMatch or GetGameTimer() < PaintballDeathGraceUntil
+end
+exports("IsPaintballHandlingDeath", IsPaintballHandlingDeath)

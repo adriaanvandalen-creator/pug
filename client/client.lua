@@ -35,6 +35,7 @@ local savedPlayerHealth       = nil
 IsPlayerDead    = false
 isInMatch       = false
 DeathCooldown   = false
+PaintballDeathGraceUntil = 0 -- keeps ambulance scripts off our deaths while we leave the arena
 ChosenWeapon    = "weapon_pistol"
 playerTeam      = nil
 LobbyHost       = false
@@ -984,6 +985,7 @@ RegisterNetEvent("Pug:paintball:removeFromArena", function()
   end
 
   if isInMatch then
+    PaintballDeathGraceUntil = GetGameTimer() + 15000
     isInMatch = false
     GiveThePlayerTheWeapon(false, false, true)  -- strip weapon
     Wait(4000)

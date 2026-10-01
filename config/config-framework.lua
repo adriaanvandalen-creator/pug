@@ -16,8 +16,8 @@ end
 ------------------------------
 -- Wasabi Ambulance (V1 and V2). Add your folder name here if you renamed the resource.
 Config.WasabiAmbulanceResources = {
-    "wasabi_ambulance",
     "wasabi_ambulance_v2",
+    "wasabi_ambulance",
 }
 function GetWasabiAmbulanceResource()
     for _, name in ipairs(Config.WasabiAmbulanceResources) do
