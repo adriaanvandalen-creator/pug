@@ -242,3 +242,28 @@ RegisterNetEvent("Pug:server:PaintballWasabiRevive", function()
         TriggerClientEvent("wasabi_ambulance:revive", src)
     end
 end)
+
+-- Warn when Wasabi Ambulance V2 has not been told to ignore paintball deaths; without it
+-- Wasabi opens its death screen every time someone dies in a match.
+CreateThread(function()
+    Wait(5000)
+    local wasabiResource = GetWasabiAmbulanceResource()
+    if not wasabiResource then return end
+    local listeners = LoadResourceFile(wasabiResource, 'bridge/listeners/client.lua')
+    if listeners and not listeners:find('IsPaintballHandlingDeath', 1, true) then
+        print(([[
+            ^4========================================================^7
+            ^1[PUG WARNING]^7: ^3%s/bridge/listeners/client.lua^7 does not ignore paintball deaths!
+            Add this inside ^3function listeners.shouldProcessDeath()^7 (and shouldProcessInjuries),
+            above its last ^3return true^7, then restart %s:
+
+            if GetResourceState('pug-paintball') == 'started' then
+                local ok, handling = pcall(function() return exports['pug-paintball']:IsPaintballHandlingDeath() end)
+                if ok and handling then
+                    return false
+                end
+            end
+            ^4========================================================^7
+        ]]):format(wasabiResource, wasabiResource))
+    end
+end)

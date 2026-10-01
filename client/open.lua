@@ -863,6 +863,10 @@ RegisterNetEvent("Pug:client:PaintballReviveEvent", function(PlayerHeadingSet)
         TriggerEvent('ak47_ambulancejob:revive') 
         TriggerEvent('ak47_ambulancejob:skellyfix') 
     elseif GetWasabiAmbulanceResource() then
+        if Config.Debug then
+            print(("[pug-paintball] revive via %s, wasabi dead: %s, ped dead: %s"):format(
+                GetWasabiAmbulanceResource(), tostring(IsWasabiDead()), tostring(IsEntityDead(PlayerPedId()))))
+        end
         if IsWasabiDead() then
             RequestWasabiRevive(PlayerHeadingSet)
         else
@@ -902,6 +906,6 @@ exports("IsInPaintball", IsInPaintball)
 -- For ambulance scripts: true while paintball owns this player's deaths (in a match, or
 -- leaving one until our own revive has run). Return false from their death handling then.
 local function IsPaintballHandlingDeath()
-    return isInMatch or GetGameTimer() < PaintballDeathGraceUntil
+    return isInMatch or GetGameTimer() < (PaintballDeathGraceUntil or 0)
 end
 exports("IsPaintballHandlingDeath", IsPaintballHandlingDeath)

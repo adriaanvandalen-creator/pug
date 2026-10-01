@@ -900,7 +900,8 @@ RegisterNetEvent("Pug:paintball:PutWeaponHandCheck", function()
 
     -- Block hands-up entirely during a match: cancel the task the moment it
     -- is detected so the animation never completes and the weapon stays in hand.
-    if IsPedHandsUp(ped, 0) then
+    if GetIsTaskActive(ped, 0) -- CTaskHandsUp
+       or IsEntityPlayingAnim(ped, "missminuteman_1ig_2", "handsup_base", 3) then
       ClearPedTasksImmediately(ped)
       GiveThePlayerTheWeapon()
       Wait(100)
