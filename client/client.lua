@@ -1667,14 +1667,28 @@ AddEventHandler("gameEventTriggered", function(event, payload)
       end
       local respawnHeading = spawn.w
 
-      -- A dead ped can't be teleported (it stays where it fell), so if no ambulance
-      -- script has resurrected us yet, bring us back alive right at the spawn.
+      -- A dead ped can't be teleported (it stays where it fell). Resurrect it where it
+      -- lies (collision is loaded there), then move the living ped to the spawn like the
+      -- match start does, frozen until the spawn's floor collision has loaded.
       if IsEntityDead(PlayerPedId()) then
-        NetworkResurrectLocalPlayer(spawn.x, spawn.y, spawn.z, respawnHeading, true, false)
+        local deathPos = GetEntityCoords(PlayerPedId())
+        NetworkResurrectLocalPlayer(deathPos.x, deathPos.y, deathPos.z, respawnHeading, true, false)
         ClearPedTasksImmediately(PlayerPedId())
       end
-      SetEntityCoords (PlayerPedId(), spawn.x, spawn.y, spawn.z, false, false, false, false)
-      SetEntityHeading(PlayerPedId(), respawnHeading)
+      local ped = PlayerPedId()
+      FreezeEntityPosition(ped, true)
+      SetEntityCoords (ped, spawn.x, spawn.y, spawn.z)
+      SetEntityHeading(ped, respawnHeading)
+      local collisionDeadline = GetGameTimer() + 5000
+      while not HasCollisionLoadedAroundEntity(ped) and GetGameTimer() < collisionDeadline do
+        RequestCollisionAtCoord(spawn.x, spawn.y, spawn.z)
+        Wait(0)
+      end
+      FreezeEntityPosition(ped, false)
+      if Config.Debug then
+        print(("[pug-paintball] respawned at %.2f %.2f %.2f (dead: %s)"):format(
+          spawn.x, spawn.y, spawn.z, tostring(IsEntityDead(ped))))
+      end
 
       -- ak47_ambulancejob takes longer to revive than wasabi.
       if GetResourceState("ak47_ambulancejob") == "started" then Wait(1000)
