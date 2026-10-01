@@ -216,9 +216,11 @@ function EndMatch(lobbyId, winnerTeam, reason)
 
     -- Award XP via sv_ranks.lua (available at runtime)
     if AwardMatchXP then
-        local modeKey = "ffa"
         local mode = lobby.mode or ""
-        if mode:find("Team_DeathMatch")   or mode:find("TDM")   then modeKey = "tdm"
+        local modeKey = GetPaintballModeKey(mode)
+        if modeKey ~= "ffa" then
+            -- matched by display name
+        elseif mode:find("Team_DeathMatch")   or mode:find("TDM")   then modeKey = "tdm"
         elseif mode:find("Hold_Your_Own") or mode:find("HYO")   then modeKey = "hyo"
         elseif mode:find("Capture")       or mode:find("CTF")   then modeKey = "ctf"
         elseif mode:find("Gun_Game")      or mode:find("GG")    then modeKey = "gg"
@@ -384,6 +386,11 @@ function StartMatch(lobbyId)
     -- Initialise CTF flags if mode is CTF (pass actual map ID directly)
     if CTFInitMatch then
         CTFInitMatch(lobbyId, actualMapId)
+    end
+
+    -- Fill the scoreboard with every player's name (0 kills) right away
+    if ResetPaintballScoreboard then
+        ResetPaintballScoreboard(lobbyId)
     end
 
     -- Start match timer

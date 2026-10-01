@@ -60,6 +60,8 @@ end
 -----------------------------------------------------------------------
 local function GetModeKey(modeStr)
     modeStr = modeStr or ""
+    local key = GetPaintballModeKey(modeStr)
+    if key ~= "ffa" or modeStr == (Config.GameModes.Free_For_All or {}).name then return key end
     if modeStr:find("Team_DeathMatch")    then return "tdm"
     elseif modeStr:find("Hold_Your_Own")  then return "hyo"
     elseif modeStr:find("Capture")        then return "ctf"
@@ -118,12 +120,117 @@ local function CheckWinCondition(lid, lobby)
 end
 
 -----------------------------------------------------------------------
+-- Scoreboard data (player rows + team scores) for the G / end-of-match board
+-----------------------------------------------------------------------
+local RankCache = {}  -- [src] = { level, prestige }, refreshed every match
+
+local function GetStats(sc, src)
+    sc.stats = sc.stats or {}
+    if not sc.stats[src] then
+        sc.stats[src] = { kills = 0, deaths = 0, score = 0 }
+    end
+    return sc.stats[src]
+end
+
+local function GetRankFor(src)
+    if RankCache[src] then return RankCache[src] end
+    local info = { level = 1, prestige = 0 }
+    if GetPlayerCID and GetPlayerRankData then
+        local ok, data = pcall(function() return GetPlayerRankData(GetPlayerCID(src)) end)
+        if ok and data then
+            info.level    = data.level    or 1
+            info.prestige = data.prestige or 0
+        end
+    end
+    RankCache[src] = info
+    return info
+end
+
+local function BuildRows(sc, players)
+    local rows = {}
+    for src, d in pairs(players or {}) do
+        local st   = GetStats(sc, src)
+        local rank = GetRankFor(src)
+        rows[#rows + 1] = {
+            id        = src,
+            name      = (type(d) == "table" and d.name) or GetPlayerFullName(src),
+            kills     = st.kills,
+            deaths    = st.deaths,
+            score     = st.score,
+            points    = st.kills * 100 + st.score * 50,
+            level     = rank.level,
+            prestige  = rank.prestige,
+            livesLeft = (sc.lives and sc.lives[src]) or 0,
+        }
+    end
+    table.sort(rows, function(a, b)
+        if a.kills ~= b.kills then return a.kills > b.kills end
+        return a.deaths < b.deaths
+    end)
+    return rows
+end
+
+local function GetTeamScores(lid, lobby, sc)
+    local modeKey = GetModeKey(lobby.mode)
+    if modeKey == "kc" then
+        return sc.kcRed or 0, sc.kcBlue or 0
+    elseif modeKey == "ctf" then
+        local st = CTFState and CTFState[lid]
+        return (st and st.redCaptures) or sc.ctfRed or 0, (st and st.blueCaptures) or sc.ctfBlue or 0
+    end
+    return sc.redScore or 0, sc.blueScore or 0
+end
+
+-- Sends the current rows + team scores to everyone in the lobby (or just `onlySrc`).
+function BroadcastPaintballScoreboard(lid, onlySrc)
+    local lobby = Lobbies and Lobbies[lid]
+    local sc    = MatchScores and MatchScores[lid]
+    if not lobby or not sc then return end
+
+    local red, blue
+    if next(lobby.ffa or {}) then
+        local all = {}
+        for src, d in pairs(lobby.ffa      or {}) do all[src] = d end
+        for src, d in pairs(lobby.redteam  or {}) do all[src] = d end
+        for src, d in pairs(lobby.blueteam or {}) do all[src] = d end
+        red, blue = BuildRows(sc, all), {}
+    else
+        red, blue = BuildRows(sc, lobby.redteam), BuildRows(sc, lobby.blueteam)
+    end
+    local rScore, bScore = GetTeamScores(lid, lobby, sc)
+
+    local targets = onlySrc and { onlySrc } or (lobby.all or {})
+    for _, src in ipairs(targets) do
+        TriggerClientEvent("Pug:Client:UpdatePaintballLeaderBoardPositions", src, red, blue, nil)
+        TriggerClientEvent("Pug:client:UpdateTeamsScore", src, rScore, bScore)
+    end
+end
+
+-- Called by sv_lobby.lua when a match starts: fresh ranks + names on the board right away.
+function ResetPaintballScoreboard(lid)
+    local lobby = Lobbies and Lobbies[lid]
+    if not lobby then return end
+    for _, src in ipairs(lobby.all or {}) do RankCache[src] = nil end
+    BroadcastPaintballScoreboard(lid)
+end
+
+-- The client asks for the board (e.g. after a kill).
+RegisterNetEvent("Pug:Server:UpdatePaintballLeaderBoard", function()
+    local src = source
+    local lid = PlayerLobby and PlayerLobby[src]
+    if lid then BroadcastPaintballScoreboard(lid, src) end
+end)
+
+AddEventHandler("playerDropped", function()
+    RankCache[source] = nil
+end)
+
+-----------------------------------------------------------------------
 -- Kill event handler
 -- [REPAIRED]: Receives kill reports from client.lua (obfuscated); validates,
 --             updates scores, broadcasts kill feed, handles killstreaks.
 -----------------------------------------------------------------------
-RegisterNetEvent("Pug:SV:PlayerKilledInPaintball", function(data)
-    local killer = source
+local function ProcessKill(killer, data)
     if not data then return end
 
     local victim   = tonumber(data.victim)
@@ -159,6 +266,16 @@ RegisterNetEvent("Pug:SV:PlayerKilledInPaintball", function(data)
     if modeKey == "hyo" then
         sc.lives[victim] = math.max(0, (sc.lives[victim] or 0) - 1)
     end
+
+    -- Per-player stats for the scoreboard, pushed before anything below can end the match.
+    local killerStats = GetStats(sc, killer)
+    local victimStats = GetStats(sc, victim)
+    killerStats.kills  = killerStats.kills  + 1
+    victimStats.deaths = victimStats.deaths + 1
+    BroadcastPaintballScoreboard(lid)
+
+    -- Client-side kill rewards: Gun Game ladder, OITC ammo, UAV / special weapon offers.
+    TriggerClientEvent("Pug:client:UpdatePlayersKillStreak", killer)
 
     -- Gun Game: advance killer's weapon
     if modeKey == "gg" then
@@ -235,6 +352,32 @@ RegisterNetEvent("Pug:SV:PlayerKilledInPaintball", function(data)
 
     -- Check win condition
     CheckWinCondition(lid, lobby)
+end
+
+RegisterNetEvent("Pug:SV:PlayerKilledInPaintball", function(data)
+    ProcessKill(source, data)
+end)
+
+-- What the client actually sends: the VICTIM reports who killed them.
+RegisterNetEvent("Pug:server:PaintBallKillUpdate", function(killerSrc, weapon, headshot)
+    local victim = source
+    local lid, lobby = GetLobbyAndTeam(victim)
+    if not lid or not lobby or not lobby.started then return end
+    local sc = MatchScores and MatchScores[lid]
+    if not sc then return end
+
+    killerSrc = tonumber(killerSrc)
+    local killerLid = killerSrc and killerSrc > 0 and GetLobbyAndTeam(killerSrc) or nil
+    if killerLid ~= lid or killerSrc == victim then
+        -- Fall, suicide or a non-player killer: only a death.
+        local victimStats = GetStats(sc, victim)
+        victimStats.deaths = victimStats.deaths + 1
+        ResetStreak(victim)
+        BroadcastPaintballScoreboard(lid)
+        return
+    end
+
+    ProcessKill(killerSrc, { victim = victim, weapon = weapon, headshot = headshot == true })
 end)
 
 -----------------------------------------------------------------------
@@ -254,6 +397,9 @@ RegisterNetEvent("Pug:SV:KCTagCollected", function(team, confirmedBy)
     elseif team == 'blueteam' then
         sc.kcBlue = (sc.kcBlue or 0) + 1
     end
+    local confirmStats = GetStats(sc, source)
+    confirmStats.score = confirmStats.score + 1
+    BroadcastPaintballScoreboard(lid)
 
     -- Award confirm XP
     if AwardKillXP then AwardKillXP(source, false, "kc_confirm") end

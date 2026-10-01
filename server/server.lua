@@ -6,6 +6,20 @@
 -----------------------------------------------------------------------
 
 -- [REPAIRED]: Centralised citizenid/identifier resolution for ESX and QBCore.
+-- Lobby modes are stored by their translated display name ("Team Deathmatch",
+-- "Gun Game", ...), so map them back via Config.GameModes rather than by text.
+local PaintballModeShortKeys = {
+    Team_DeathMatch = "tdm", Hold_Your_Own = "hyo", Capture_The_Flag = "ctf", Gun_Game = "gg",
+    Free_For_All = "ffa", One_In_The_Chamber = "oitc", Kill_Confirmed = "kc",
+}
+function GetPaintballModeKey(modeStr)
+    for key, short in pairs(PaintballModeShortKeys) do
+        local gm = Config.GameModes and Config.GameModes[key]
+        if gm and modeStr == gm.name then return short end
+    end
+    return "ffa"
+end
+
 function GetPlayerCID(source)
     if Framework == "QBCore" then
         local player = FWork.Functions.GetPlayer(source)
