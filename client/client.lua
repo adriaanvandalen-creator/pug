@@ -1667,27 +1667,37 @@ AddEventHandler("gameEventTriggered", function(event, payload)
       end
       local respawnHeading = spawn.w
 
-      -- A dead ped can't be teleported (it stays where it fell). Resurrect it where it
-      -- lies (collision is loaded there), then move the living ped to the spawn like the
-      -- match start does, frozen until the spawn's floor collision has loaded.
-      if IsEntityDead(PlayerPedId()) then
-        local deathPos = GetEntityCoords(PlayerPedId())
-        NetworkResurrectLocalPlayer(deathPos.x, deathPos.y, deathPos.z, respawnHeading, true, false)
-        ClearPedTasksImmediately(PlayerPedId())
-      end
-      local ped = PlayerPedId()
-      FreezeEntityPosition(ped, true)
-      SetEntityCoords (ped, spawn.x, spawn.y, spawn.z)
-      SetEntityHeading(ped, respawnHeading)
-      local collisionDeadline = GetGameTimer() + 5000
-      while not HasCollisionLoadedAroundEntity(ped) and GetGameTimer() < collisionDeadline do
-        RequestCollisionAtCoord(spawn.x, spawn.y, spawn.z)
-        Wait(0)
+      -- A dead or dying ped can't be teleported (it stays where it fell). Resurrect it
+      -- where it lies (collision is loaded there), then move the living ped to the spawn,
+      -- frozen until the spawn's floor has loaded. Retry until we really are there.
+      local spawnPos = vector3(spawn.x, spawn.y, spawn.z)
+      local ped
+      for attempt = 1, 10 do
+        ped = PlayerPedId()
+        if IsEntityDead(ped) or IsPedFatallyInjured(ped) or IsPedDeadOrDying(ped, true) then
+          local deathPos = GetEntityCoords(ped)
+          NetworkResurrectLocalPlayer(deathPos.x, deathPos.y, deathPos.z, respawnHeading, true, false)
+          ped = PlayerPedId()
+          ClearPedTasksImmediately(ped)
+          SetEntityHealth(ped, GetEntityMaxHealth(ped))
+        end
+        FreezeEntityPosition(ped, true)
+        SetEntityCoords (ped, spawn.x, spawn.y, spawn.z)
+        SetEntityHeading(ped, respawnHeading)
+        local collisionDeadline = GetGameTimer() + 5000
+        while not HasCollisionLoadedAroundEntity(ped) and GetGameTimer() < collisionDeadline do
+          RequestCollisionAtCoord(spawn.x, spawn.y, spawn.z)
+          Wait(0)
+        end
+        Wait(100)
+        if #(GetEntityCoords(ped) - spawnPos) < 5.0 then break end
+        if Config.Debug then print(("[pug-paintball] respawn teleport attempt %d didn't stick, retrying"):format(attempt)) end
       end
       FreezeEntityPosition(ped, false)
       if Config.Debug then
-        print(("[pug-paintball] respawned at %.2f %.2f %.2f (dead: %s)"):format(
-          spawn.x, spawn.y, spawn.z, tostring(IsEntityDead(ped))))
+        local p = GetEntityCoords(ped)
+        print(("[pug-paintball] respawn: spawn %.1f %.1f %.1f, now at %.1f %.1f %.1f (dead: %s)"):format(
+          spawn.x, spawn.y, spawn.z, p.x, p.y, p.z, tostring(IsEntityDead(ped))))
       end
 
       -- ak47_ambulancejob takes longer to revive than wasabi.
