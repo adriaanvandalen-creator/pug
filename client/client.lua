@@ -1467,29 +1467,20 @@ end
 -- ============================================================================
 local deathHandlerLock = false
 
-AddEventHandler("gameEventTriggered", function(event, payload)
+local function isLocalPedDown(ped)
+  return IsEntityDead(ped) or IsPedFatallyInjured(ped) or IsPedDeadOrDying(ped, true)
+end
+
+local function onLocalDamageEvent(event, payload)
   if event ~= "CEventNetworkEntityDamage" then return end
 
-  local victimPed     = payload[2]
-  local fatalFlag     = (payload[4] == 1)
-  local damagerPed    = payload[1]
-  local rawIsDeath    = payload[4]
-  if not IsPedAPlayer(damagerPed) then return end
+  -- payload[1] is the victim. Only react to our own death: the fatal flag's index in
+  -- payload differs between game builds, so check the ped's state directly instead.
+  local damagerPed = payload[1]   -- (name kept from the original: this is the victim)
+  if damagerPed ~= PlayerPedId() then return end
+  local fatalFlag = isLocalPedDown(damagerPed)
 
-  local localPlayerId = PlayerId()
-
-  -- True if the local player was the victim and they're either fatally hit
-  -- or already dead/dying.
-  local localIsVictim
-  if rawIsDeath then
-    local victimPlayerIdx = NetworkGetPlayerIndexFromPed(damagerPed)
-    if not IsPedDeadOrDying(damagerPed, true) then
-      localIsVictim = (IsPedFatallyInjured(damagerPed) == localPlayerId)
-                       and IsPedFatallyInjured(damagerPed)
-    end
-  end
-
-  if (fatalFlag and isInMatch) or (localIsVictim and isInMatch) then
+  if fatalFlag and isInMatch then
 
     -- Re-entrancy lock: don't run the pipeline twice for the same death.
     if not deathHandlerLock then
@@ -1752,6 +1743,19 @@ AddEventHandler("gameEventTriggered", function(event, payload)
     end
 
     TriggerEvent("Pug:client:PlayerIsDeadFinish")
+  end
+end
+AddEventHandler("gameEventTriggered", onLocalDamageEvent)
+
+-- Some deaths never raise a damage event (falls, explosions, other scripts setting
+-- health to 0). While in a match, run the same death/respawn pipeline for those too.
+CreateThread(function()
+  while true do
+    Wait(250)
+    if isInMatch and not IsPlayerDead and not DeathCooldown and not deathHandlerLock
+       and isLocalPedDown(PlayerPedId()) then
+      onLocalDamageEvent("CEventNetworkEntityDamage", { PlayerPedId() })
+    end
   end
 end)
 
