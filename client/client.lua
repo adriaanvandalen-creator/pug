@@ -196,7 +196,27 @@ end
 --   giveSpecialWeapon : when true, give Config.SpecailWeaponItem (kill-streak)
 --   stripToUnarmed    : when true, force the player to weapon_unarmed
 -- ============================================================================
+-- Give + select a weapon without replaying the draw animation when it's already in hand
+-- (re-selecting it every call is what made the weapon flicker).
+local function equipMatchWeapon(weaponName, ammo, clip)
+  local ped  = PlayerPedId()
+  local hash = GetHashKey(weaponName)
+  if not HasPedGotWeapon(ped, hash, false) then
+    GiveWeaponToPed(ped, hash, 0, false, false)
+  end
+  if ammo then SetPedAmmo(ped, hash, ammo) end
+  if GetSelectedPedWeapon(ped) ~= hash then
+    SetCurrentPedWeapon(ped, hash, true)
+  end
+  if clip then SetAmmoInClip(ped, hash, clip) end
+end
+
 function GiveThePlayerTheWeapon(useOneAmmoForOITC, giveSpecialWeapon, stripToUnarmed)
+  if Config.Debug then
+    print(("[pug-paintball] GiveThePlayerTheWeapon(%s, %s, %s)\n%s"):format(
+      tostring(useOneAmmoForOITC), tostring(giveSpecialWeapon), tostring(stripToUnarmed),
+      debug.traceback("", 2)))
+  end
   CreateThread(function()
     if stripToUnarmed then
       -- ---------- strip back to fists --------------------------------------
@@ -206,22 +226,17 @@ function GiveThePlayerTheWeapon(useOneAmmoForOITC, giveSpecialWeapon, stripToUna
     elseif giveSpecialWeapon then
       -- ---------- kill-streak special weapon (e.g. RPG) --------------------
       notifyOxInventoryCurrentWeapon(Config.SpecailWeaponItem)
-      GiveWeaponToPed   (PlayerPedId(), GetHashKey(Config.SpecailWeaponItem), 0, false, false)
-      SetPedAmmo        (PlayerPedId(), GetHashKey(Config.SpecailWeaponItem), 1000)
-      SetCurrentPedWeapon(PlayerPedId(), GetHashKey(Config.SpecailWeaponItem), true)
+      equipMatchWeapon(Config.SpecailWeaponItem, 1000)
 
     elseif CheckMatchingGameMode("Gun_Game") then
       -- ---------- Gun Game: give the weapon at index ChosenWeapon ---------
       local weaponName = RndomWeapons[ChosenWeapon]
       notifyOxInventoryCurrentWeapon(weaponName)
-      GiveWeaponToPed   (PlayerPedId(), GetHashKey(weaponName), 0, false, false)
-      SetPedAmmo        (PlayerPedId(), GetHashKey(weaponName), 1000)
-      SetCurrentPedWeapon(PlayerPedId(), GetHashKey(weaponName), true)
+      equipMatchWeapon(weaponName, 1000)
 
     elseif CheckMatchingGameMode("One_In_The_Chamber") then
       -- ---------- OITC: the OneInTheChamberWeapon, one shot at a time -----
-      GiveWeaponToPed   (PlayerPedId(), GetHashKey(Config.OneInTheChamberWeapon), 0, false, false)
-      SetCurrentPedWeapon(PlayerPedId(), GetHashKey(Config.OneInTheChamberWeapon), true)
+      equipMatchWeapon(Config.OneInTheChamberWeapon)
 
       if useOneAmmoForOITC then
         -- Start with 1 ammo (used on respawn after firing).
@@ -238,10 +253,7 @@ function GiveThePlayerTheWeapon(useOneAmmoForOITC, giveSpecialWeapon, stripToUna
     else
       -- ---------- default: regular team-deathmatch weapon -----------------
       notifyOxInventoryCurrentWeapon(ChosenWeapon)
-      GiveWeaponToPed   (PlayerPedId(), GetHashKey(ChosenWeapon), 0, false, false)
-      SetPedAmmo        (PlayerPedId(), GetHashKey(ChosenWeapon), 1000)
-      SetCurrentPedWeapon(PlayerPedId(), GetHashKey(ChosenWeapon), true)
-      SetAmmoInClip     (PlayerPedId(), GetHashKey(ChosenWeapon), 1000)
+      equipMatchWeapon(ChosenWeapon, 1000, 1000)
     end
   end)
 end
@@ -668,7 +680,27 @@ function(mapName, oitcLives, gameMode, teamPlayers, randomWeapons,
   -- ox_inventory: let us hand out weapons during the match instead of disarming
   -- anything it didn't equip itself (that caused the weapon to flicker).
   if GetResourceState("ox_inventory") == "started" then
-    pcall(function() exports.ox_inventory:weaponWheel(true) end)
+    local ok, err = pcall(function() exports.ox_inventory:weaponWheel(true) end)
+    if not ok then
+      print("^1[pug-paintball] ox_inventory weaponWheel export failed, ox_inventory will keep disarming match weapons: " .. tostring(err) .. "^7")
+    end
+  end
+
+  -- Debug: log every change of the weapon in hand so anything still swapping it shows up.
+  if Config.Debug then
+    CreateThread(function()
+      Wait(1000)
+      local last = GetSelectedPedWeapon(PlayerPedId())
+      while isInMatch do
+        local now = GetSelectedPedWeapon(PlayerPedId())
+        if now ~= last then
+          print(("[pug-paintball] weapon in hand changed %s -> %s (dead: %s)"):format(
+            last, now, tostring(IsEntityDead(PlayerPedId()))))
+          last = now
+        end
+        Wait(0)
+      end
+    end)
   end
 
   -- Snapshot baseline state we'll need to restore on match end.
@@ -1623,28 +1655,26 @@ AddEventHandler("gameEventTriggered", function(event, payload)
       end
 
       -- ---- Pick a respawn spawn -----------------------------------------
-      local respawnHeading = nil
+      local spawn
       if isFFAGameMode() then
-        local idx = math.random(1, #Config.FFASpawns[currentMapName])
-        SetEntityCoords(PlayerPedId(),
-          Config.FFASpawns[currentMapName][idx].x,
-          Config.FFASpawns[currentMapName][idx].y,
-          Config.FFASpawns[currentMapName][idx].z - 1)
-        respawnHeading = Config.FFASpawns[currentMapName][idx].w
-        SetEntityHeading(PlayerPedId(), respawnHeading)
+        local list = Config.FFASpawns[currentMapName]
+        local s = list[math.random(1, #list)]
+        spawn = vector4(s.x, s.y, s.z - 1, s.w)
       else
-        if playerTeam == "redteam" then
-          local idx = math.random(1, #Config.RedTeamSpawns[currentMapName])
-          SetEntityCoords (PlayerPedId(), Config.RedTeamSpawns[currentMapName][idx])
-          respawnHeading = Config.RedTeamSpawns[currentMapName][idx].w
-          SetEntityHeading(PlayerPedId(), respawnHeading)
-        else
-          local idx = math.random(1, #Config.BlueTeamSpawns[currentMapName])
-          SetEntityCoords (PlayerPedId(), Config.BlueTeamSpawns[currentMapName][idx])
-          respawnHeading = Config.BlueTeamSpawns[currentMapName][idx].w
-          SetEntityHeading(PlayerPedId(), respawnHeading)
-        end
+        local list = (playerTeam == "redteam") and Config.RedTeamSpawns[currentMapName]
+                                                 or Config.BlueTeamSpawns[currentMapName]
+        spawn = list[math.random(1, #list)]
       end
+      local respawnHeading = spawn.w
+
+      -- A dead ped can't be teleported (it stays where it fell), so if no ambulance
+      -- script has resurrected us yet, bring us back alive right at the spawn.
+      if IsEntityDead(PlayerPedId()) then
+        NetworkResurrectLocalPlayer(spawn.x, spawn.y, spawn.z, respawnHeading, true, false)
+        ClearPedTasksImmediately(PlayerPedId())
+      end
+      SetEntityCoords (PlayerPedId(), spawn.x, spawn.y, spawn.z, false, false, false, false)
+      SetEntityHeading(PlayerPedId(), respawnHeading)
 
       -- ak47_ambulancejob takes longer to revive than wasabi.
       if GetResourceState("ak47_ambulancejob") == "started" then Wait(1000)
